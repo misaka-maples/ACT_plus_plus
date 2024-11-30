@@ -1,85 +1,118 @@
-# Imitation Learning algorithms and Co-training for Mobile ALOHA
+# 模仿学习算法和移动ALOHA的共训练
+
+#### 项目网站: https://mobile-aloha.github.io/
+
+本仓库包含ACT、扩散策略(Diffusion Policy)和VINN的实现，以及两个模拟环境：Transfer Cube和Bimanual Insertion。您可以在模拟环境或真实环境中训练和评估这些模型。对于真实环境，您还需要安装[Mobile ALOHA](https://github.com/MarkFzp/mobile-aloha)。该仓库是从[ACT仓库](https://github.com/tonyzhaozh/act)派生的。
+
+### 更新：
+您可以在[这里](https://drive.google.com/drive/folders/1gPR03v05S1xiInoVJn7G7VJ9pDCnxq9O?usp=share_link)找到所有的模拟/人工演示数据。
+
+### 仓库结构
+- ``imitate_episodes.py`` 训练和评估ACT
+- ``policy.py`` ACT策略的适配器
+- ``detr`` ACT的模型定义，修改自DETR
+- ``sim_env.py`` 基于Mujoco和DM_Control的关节空间控制环境
+- ``ee_sim_env.py`` 基于Mujoco和DM_Control的末端执行器(EE)空间控制环境
+- ``scripted_policy.py`` 用于模拟环境的脚本化策略
+- ``constants.py`` 在文件间共享的常量
+- ``utils.py`` 数据加载和辅助函数等工具
+- ``visualize_episodes.py`` 从.hdf5数据集中保存视频
+
+### 软件安装
+
+```
+conda create -n aloha python=3.8.10
+conda activate aloha
+pip install torchvision
+pip install torch
+pip install pyquaternion
+pip install pyyaml
+pip install rospkg
+pip install pexpect
+pip install mujoco==2.3.7
+pip install dm_control==1.0.14
+pip install opencv-python
+pip install matplotlib
+pip install einops
+pip install packaging
+pip install h5py
+pip install 
+
+```
+
+- 还需要安装[robomimic](https://github.com/ARISE-Initiative/robomimic/tree/r2d2)（注意r2d2分支），通过 `pip install -e .`
+- 需要安装detr、mobile_aloha、robomimic，执行：`python setup.py install`
+
+### 硬件安装
+
+#### 启动相机流程
+
+```bash
+# 进入项目文件夹
+cd ~/Documents/xzx_projects/ros2_ws
+# 启动 ros2 相机节点
+. ./install/setup.zsh
+# 开启相机
+ros2 launch orbbec_camera multi_camera.launch.py
+```
+启动后可开启另一个终端，打开 `rviz2` 来检查相机是否正常开启
+```bash
+ctrl + t
+# 在新终端中输入
+rviz2
+```
 
 
-#### Project Website: https://mobile-aloha.github.io/
+### 示例用法
 
-This repo contains the implementation of ACT, Diffusion Policy and VINN, together with 2 simulated environments:
-Transfer Cube and Bimanual Insertion. You can train and evaluate them in sim or real.
-For real, you would also need to install [Mobile ALOHA](https://github.com/MarkFzp/mobile-aloha). This repo is forked from the [ACT repo](https://github.com/tonyzhaozh/act).
+要设置一个新的终端，运行：
 
-### Updates:
-You can find all scripted/human demo for simulated environments [here](https://drive.google.com/drive/folders/1gPR03v05S1xiInoVJn7G7VJ9pDCnxq9O?usp=share_link).
+```bash
+conda activate aloha
+cd <act repo的路径>
+```
 
+### 模拟实验
 
-### Repo Structure
-- ``imitate_episodes.py`` Train and Evaluate ACT
-- ``policy.py`` An adaptor for ACT policy
-- ``detr`` Model definitions of ACT, modified from DETR
-- ``sim_env.py`` Mujoco + DM_Control environments with joint space control
-- ``ee_sim_env.py`` Mujoco + DM_Control environments with EE space control
-- ``scripted_policy.py`` Scripted policies for sim environments
-- ``constants.py`` Constants shared across files
-- ``utils.py`` Utils such as data loading and helper functions
-- ``visualize_episodes.py`` Save videos from a .hdf5 dataset
+下面的示例中使用``sim_transfer_cube_scripted``任务。另一个选择是``sim_insertion_scripted``。
+要生成50个脚本化数据的回合，运行：
 
+```bash
+python3 record_sim_episodes.py --task_name sim_transfer_cube_scripted --dataset_dir <数据保存目录> --num_episodes 50
+```
 
-### Installation
+可以添加``--onscreen_render``标志来查看实时渲染。
+要在收集完数据后可视化模拟的回合，运行：
 
-    conda create -n aloha python=3.8.10
-    conda activate aloha
-    pip install torchvision
-    pip install torch
-    pip install pyquaternion
-    pip install pyyaml
-    pip install rospkg
-    pip install pexpect
-    pip install mujoco==2.3.7
-    pip install dm_control==1.0.14
-    pip install opencv-python
-    pip install matplotlib
-    pip install einops
-    pip install packaging
-    pip install h5py
-    pip install ipython
+```bash
+python3 visualize_episodes.py --dataset_dir <数据保存目录> --episode_idx 0
+```
 
-- also need to install https://github.com/ARISE-Initiative/robomimic/tree/r2d2 (note the r2d2 branch) for Diffusion Policy by `pip install -e .`
-- Need to install detr, mobile_aloha, robomimic, run: `python setup.py install `
+注意：要可视化来自mobile-aloha硬件的数据，使用来自[mobile-aloha](https://github.com/MarkFzp/mobile-aloha)的visualize_episodes.py。
 
-### Example Usages
+要训练ACT：
 
-To set up a new terminal, run:
+```bash
+# Transfer Cube任务
+python3 imitate_episodes.py --task_name sim_transfer_cube_scripted --ckpt_dir <ckpt目录> --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 8 --dim_feedforward 3200 --num_epochs 2000  --lr 1e-5 --seed 0
+```
 
-    conda activate aloha
-    cd <path to act repo>
+要评估策略，运行相同的命令，但添加``--eval``。这将加载最佳验证检查点。
 
-### Simulated experiments (LEGACY table-top ALOHA environments)
+对于Transfer Cube任务，成功率应该在90%左右，对于插入任务则在50%左右。
 
-We use ``sim_transfer_cube_scripted`` task in the examples below. Another option is ``sim_insertion_scripted``.
-To generated 50 episodes of scripted data, run:
+要启用时间集成(temporal ensembling)，添加``--temporal_agg``
 
-    python3 record_sim_episodes.py --task_name sim_transfer_cube_scripted --dataset_dir <data save dir> --num_episodes 50
+每次回合的录像将保存在``<ckpt_dir>``中。
 
-To can add the flag ``--onscreen_render`` to see real-time rendering.
-To visualize the simulated episodes after it is collected, run
+您还可以添加``--onscreen_render``以在评估期间查看实时渲染。
 
-    python3 visualize_episodes.py --dataset_dir <data save dir> --episode_idx 0
+部署ACT：需要在根目录创建一个results文件，来存储训练得到的模型文件
 
-Note: to visualize data from the mobile-aloha hardware, use the visualize_episodes.py from https://github.com/MarkFzp/mobile-aloha
+对于真实数据，由于建模更难，请至少训练5000个epochs，或者在损失平稳后训练3-4倍的时间。
 
-To train ACT:
-    
-    # Transfer Cube task
-    python3 imitate_episodes.py --task_name sim_transfer_cube_scripted --ckpt_dir <ckpt dir> --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 8 --dim_feedforward 3200 --num_epochs 2000  --lr 1e-5 --seed 0
+更多信息，请参考[tuning tips](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing)。
 
+### [ACT调优建议](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing)
+如果您的ACT策略很不稳定或在回合中途停顿，只需训练更长时间！成功率和流畅性通常会在损失平稳后进一步提升。
 
-To evaluate the policy, run the same command but add ``--eval``. This loads the best validation checkpoint.
-The success rate should be around 90% for transfer cube, and around 50% for insertion.
-To enable temporal ensembling, add flag ``--temporal_agg``.
-Videos will be saved to ``<ckpt_dir>`` for each rollout.
-You can also add ``--onscreen_render`` to see real-time rendering during evaluation.
-
-For real-world data where things can be harder to model, train for at least 5000 epochs or 3-4 times the length after the loss has plateaued.
-Please refer to [tuning tips](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing) for more info.
-
-### [ACT tuning tips](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing)
-TL;DR: if your ACT policy is jerky or pauses in the middle of an episode, just train for longer! Success rate and smoothness can improve way after loss plateaus.

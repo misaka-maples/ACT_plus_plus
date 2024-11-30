@@ -47,12 +47,15 @@ def get_state(file_path):
                     # image_list.append(decompressed_image)
                     camera_top_data_list.append(decompressed_image)
                     camera_right_data_list.append(decompressed_image_)
+            else:
+                camera_top_data_list=camera_top_data
+                camera_right_data_list=camera_right_data
     except Exception as e:
         print(f"Error saving video:\n {e}")
     return camera_top_data_list, camera_right_data_list, qpos
 
 
-def modify_hdf5(file_path):
+def modify_hdf5(file_path,compress):
     """
     修改 HDF5 文件中的摄像头数据。
 
@@ -77,22 +80,27 @@ def modify_hdf5(file_path):
             original_path_actions = 'action'
             if original_path_pos not in f:
                 raise KeyError(f"Path '{original_path_actions}' not found in the HDF5 file.")
+            if compress is not None:
+                f.attrs['compress']=False
             # 获取原始数据
             camera_top_data = f[top][:]
             camera_right_data = f[right][:]
             qpos = f[original_path_pos][:]
             actions = f[original_path_actions][:]
             print(f"camera_top_data.shape{camera_top_data.shape},camera_right_data.shape{camera_right_data.shape}")
-            print(f'hdf5_edit_qpos: {qpos.shape}')
+            # print(f'hdf5_edit_qpos: {qpos.shape}')
             qpos = qpos[:, :7]
-            actions = actions[:, :7]-2
+            actions = actions[:, :7]
             last_elements = [row[-1] for row in actions]
-            print(f'hdf5_edit_action: {last_elements}')
+            # print(f'hdf5_edit_action: {last_elements}')
             # 创建新的路径并写入数据
-            new_paths = [
+            new_paths_top = [
                 'observations/images/top',
-                'observations/images/right_wrist',
+                # 'observations/images/right_wrist',
                 # 'observations/images/right_wrist'
+            ]
+            new_paths_right = [
+                'observations/images/right_wrist'
             ]
             new_qpos_path = [
                 'observations/qpos',
@@ -112,18 +120,30 @@ def modify_hdf5(file_path):
                     del f[path]
                 # 写入新的数据
                 f.create_dataset(path, data=qpos)
-            for path in new_paths:
+            for path in new_paths_top:
                 # 如果路径已存在，删除旧的路径
                 if path in f:
                     del f[path]
                 # 写入新的数据
                 f.create_dataset(path, data=camera_top_data)
+            for path in new_paths_right:
+                # 如果路径已存在，删除旧的路径
+                if path in f:
+                    del f[path]
+                # 写入新的数据
+                f.create_dataset(path, data=camera_right_data)
 
             print("Modification complete. Paths updated:")
-            for path in new_paths:
+            for path in new_paths_top:
+                print(f"  - {path}")
+            for path in new_paths_right:
                 print(f"  - {path}")
             for path in new_qpos_path:
                 print(f"  - {path}")
+            for path in new_actions_path:
+                print(f"  - {path}")
+
+            print(f.attrs.get('compress'))
     except Exception as e:
         print(f"Error modifying HDF5 file:\n {e}")
 
@@ -208,11 +228,12 @@ def save_video(file_path, fps=10, i=0):
             print(f"\nVideo saved successfully at {file_path}")
 
     except Exception as e:
+
         print(f"Error saving video:\n {e}")
 
 
 if __name__ == '__main__':
-    modify_hdf5('D:\\aloha\qpos_7_image_2\\act++\is_sim_0_compress_1_real\episode_0.hdf5')
+    modify_hdf5('/home/zhnh/Documents/xzx_projects/aloha_deploy/act-plus-plus/results/episode_0.hdf5', 1)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # save_video('D:\\aloha\qpos_7_image_2\\act++\is_sim_0_compress_1_real', fps=10, i=19)

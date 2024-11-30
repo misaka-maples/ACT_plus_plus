@@ -172,6 +172,7 @@ class ActionGenerator:
         返回：
         - action: 当前时间步生成的动作向量。
         """
+        # print(self.qpos_list)
         qpos_list=self.qpos_list
         image_dict=self.image_dict
         start_time = time.time()

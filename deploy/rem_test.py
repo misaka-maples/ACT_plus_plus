@@ -82,6 +82,7 @@ if __name__ == "__main__":
     executor.spin_once(timeout_sec=1)
     camera_image = camera_top_node.get_images()
     QposRecorder = QposRecorder()
+    #state角度值，角度转弧度
     qpos_list = [math.radians(i) for i in QposRecorder.get_state()]
     actions_list = []
     qpos_list_ = []
@@ -137,7 +138,7 @@ if __name__ == "__main__":
         # print(len(qpos_list),len(actions_list))
         if i %1==0 and i!=0:
             path_save_image = os.path.join("/home/zhnh/Documents/xzx_projects/aloha_deploy/act-plus-plus/deploy","deploy_image",current_time.strftime("%m-%d %H:%M")+".png")
-            print(path_save_image)
+            # print(path_save_image)
             visualize_joints(qpos_list_, actions_list, path_save_image)
 
     # time.sleep(0.5)

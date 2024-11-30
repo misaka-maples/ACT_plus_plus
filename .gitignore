@@ -145,3 +145,7 @@ ckpts/
 *.png
 *.npy
 play.ipynb
+
+./results
+./Start-Service ssh-agent
+./Start-Service ssh-agent.pub

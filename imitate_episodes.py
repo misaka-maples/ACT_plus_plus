@@ -151,9 +151,9 @@ def main(args):
         os.makedirs(ckpt_dir)
     config_path = os.path.join(ckpt_dir, 'config.pkl')
     expr_name = ckpt_dir.split('/')[-1]
-    if not is_eval:
-        wandb.init(project="mobile-aloha2", reinit=True, entity="mobile-aloha2", name=expr_name)
-        wandb.config.update(config)
+    # if not is_eval:
+    #     wandb.init(project="mobile-aloha2", reinit=True, entity="mobile-aloha2", name=expr_name)
+    #     wandb.config.update(config)
     with open(config_path, 'wb') as f:
         pickle.dump(config, f)
     if is_eval:
@@ -184,7 +184,7 @@ def main(args):
     ckpt_path = os.path.join(ckpt_dir, f'policy_best.ckpt')
     torch.save(best_state_dict, ckpt_path)
     print(f'Best ckpt, val loss {min_val_loss:.6f} @ step{best_step}')
-    wandb.finish()
+    # wandb.finish()
 
 
 def make_policy(policy_class, policy_config):
@@ -518,7 +518,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
 
 
         rewards = np.array(rewards)
-        episode_return = np.sum(rewards[rewards!=None])
+        episode_return = np.sum(rewards[rewards is not None])
         episode_returns.append(episode_return)
         episode_highest_reward = np.max(rewards)
         highest_rewards.append(episode_highest_reward)
@@ -544,9 +544,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
         f.write(repr(episode_returns))
         f.write('\n\n')
         f.write(repr(highest_rewards))
-
     return success_rate, avg_return
-
 
 def forward_pass(data, policy):
     # 解包输入数据，其中包含图像数据、qpos 数据、动作数据和填充标记
@@ -610,7 +608,7 @@ def train_bc(train_dataloader, val_dataloader, config):
             # print(f"1111111111111111111111111111111111111111111111")
             for k in list(validation_summary.keys()):
                 validation_summary[f'val_{k}'] = validation_summary.pop(k)            
-            wandb.log(validation_summary, step=step)
+            # wandb.log(validation_summary, step=step)
             print(f'Val loss:   {epoch_val_loss:.5f}')
             summary_string = ''
             for k, v in validation_summary.items():
@@ -635,7 +633,7 @@ def train_bc(train_dataloader, val_dataloader, config):
         loss = forward_dict['loss']
         loss.backward()
         optimizer.step()
-        wandb.log(forward_dict, step=step) # not great, make training 1.md-2% slower
+        # wandb.log(forward_dict, step=step) # not great, make training 1.md-2% slower
 
         if step % save_every == 0:
             ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')

@@ -149,3 +149,5 @@ play.ipynb
 ./results
 ./Start-Service ssh-agent
 ./Start-Service ssh-agent.pub
+/hdf5_file/save_dir/
+/is_sim_0_compress_1_real/

@@ -10,10 +10,13 @@ from torch.utils.data import TensorDataset, DataLoader
 import torchvision.transforms as transforms
 
 import IPython
+
 e = IPython.embed
+
 
 def flatten_list(l):
     return [item for sublist in l for item in sublist]
+
 
 class EpisodicDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_path_list, camera_names, norm_stats, episode_ids, episode_len, chunk_size, policy_class):
@@ -33,7 +36,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
         else:
             self.augment_images = False
         self.transformations = None
-        self.__getitem__(0) # initialize self.is_sim and self.transformations
+        self.__getitem__(0)  # initialize self.is_sim and self.transformations
         self.is_sim = False
 
     # def __len__(self):
@@ -41,7 +44,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
 
     def _locate_transition(self, index):
         assert index < self.cumulative_len[-1]
-        episode_index = np.argmax(self.cumulative_len > index) # argmax returns first True index
+        episode_index = np.argmax(self.cumulative_len > index)  # argmax returns first True index
         start_ts = index - (self.cumulative_len[episode_index] - self.episode_len[episode_index])
         episode_id = self.episode_ids[episode_index]
         return episode_id, start_ts
@@ -53,7 +56,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
             # print(dataset_path)
             with h5py.File(dataset_path, 'r') as root:
                 # print(f"dataset_path{dataset_path}")
-                try: # some legacy data does not have this attribute
+                try:  # some legacy data does not have this attribute
                     is_sim = root.attrs['sim']
                 except:
                     is_sim = False
@@ -64,7 +67,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
                     base_action = root['/base_action'][()]
                     base_action = preprocess_base_action(base_action)
                     action = np.concatenate([root['/action'][()], base_action], axis=-1)
-                else:  
+                else:
                     action = root['/action'][()]
                     dummy_base_action = np.zeros([action.shape[0], 2])
                     action = np.concatenate([action, dummy_base_action], axis=-1)
@@ -89,8 +92,8 @@ class EpisodicDataset(torch.utils.data.Dataset):
                     action = action[start_ts:]
                     action_len = episode_len - start_ts
                 else:
-                    action = action[max(0, start_ts - 1):] # hack, to make timesteps more aligned
-                    action_len = episode_len - max(0, start_ts - 1) # hack, to make timesteps more aligned
+                    action = action[max(0, start_ts - 1):]  # hack, to make timesteps more aligned
+                    action_len = episode_len - max(0, start_ts - 1)  # hack, to make timesteps more aligned
 
             # self.is_sim = is_sim
             padded_action = np.zeros((self.max_episode_len, original_action_shape[1]), dtype=np.float32)
@@ -125,7 +128,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
                     transforms.RandomCrop(size=[int(original_size[0] * ratio), int(original_size[1] * ratio)]),
                     transforms.Resize(original_size, antialias=True),
                     transforms.RandomRotation(degrees=[-5.0, 5.0], expand=False),
-                    transforms.ColorJitter(brightness=0.3, contrast=0.4, saturation=0.5) #, hue=0.08)
+                    transforms.ColorJitter(brightness=0.3, contrast=0.4, saturation=0.5)  #, hue=0.08)
                 ]
 
             if self.augment_images:
@@ -183,23 +186,24 @@ def get_norm_stats(dataset_path_list):
     # normalize action data
     action_mean = all_action_data.mean(dim=[0]).float()
     action_std = all_action_data.std(dim=[0]).float()
-    action_std = torch.clip(action_std, 1e-2, np.inf) # clipping
+    action_std = torch.clip(action_std, 1e-2, np.inf)  # clipping
 
     # normalize qpos data
     qpos_mean = all_qpos_data.mean(dim=[0]).float()
     qpos_std = all_qpos_data.std(dim=[0]).float()
-    qpos_std = torch.clip(qpos_std, 1e-2, np.inf) # clipping
+    qpos_std = torch.clip(qpos_std, 1e-2, np.inf)  # clipping
 
     action_min = all_action_data.min(dim=0).values.float()
     action_max = all_action_data.max(dim=0).values.float()
 
     eps = 0.0001
     stats = {"action_mean": action_mean.numpy(), "action_std": action_std.numpy(),
-             "action_min": action_min.numpy() - eps,"action_max": action_max.numpy() + eps,
+             "action_min": action_min.numpy() - eps, "action_max": action_max.numpy() + eps,
              "qpos_mean": qpos_mean.numpy(), "qpos_std": qpos_std.numpy(),
              "example_qpos": qpos}
 
     return stats, all_episode_len
+
 
 def find_all_hdf5(dataset_dir, skip_mirrored_data):
     hdf5_files = []
@@ -212,6 +216,7 @@ def find_all_hdf5(dataset_dir, skip_mirrored_data):
     print(f'Found {len(hdf5_files)} hdf5 files')
     return hdf5_files
 
+
 def BatchSampler(batch_size, episode_len_l, sample_weights):
     sample_probs = np.array(sample_weights) / np.sum(sample_weights) if sample_weights is not None else None
     sum_dataset_len_l = np.cumsum([0] + [np.sum(episode_len) for episode_len in episode_len_l])
@@ -222,6 +227,7 @@ def BatchSampler(batch_size, episode_len_l, sample_weights):
             step_idx = np.random.randint(sum_dataset_len_l[episode_idx], sum_dataset_len_l[episode_idx + 1])
             batch.append(step_idx)
         yield batch
+
 
 def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_size_val, chunk_size, skip_mirrored_data=False, load_pretrain=False, policy_class=None, stats_dir_l=None, sample_weights=None, train_ratio=0.99):
     if type(dataset_dir_l) == str:
@@ -237,6 +243,10 @@ def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_
     shuffled_episode_ids_0 = np.random.permutation(num_episodes_0)
     train_episode_ids_0 = shuffled_episode_ids_0[:int(train_ratio * num_episodes_0)]
     val_episode_ids_0 = shuffled_episode_ids_0[int(train_ratio * num_episodes_0):]
+    # 直接指定测试集数据索引
+    # val_episode_ids_0 = np.array([7])
+    # train_episode_ids_0 = np.setdiff1d(shuffled_episode_ids_0, val_episode_ids_0)  # 取差集
+
     train_episode_ids_l = [train_episode_ids_0] + [np.arange(num_episodes) + num_episodes_cumsum[idx] for idx, num_episodes in enumerate(num_episodes_l[1:])]
     val_episode_ids_l = [val_episode_ids_0]
     train_episode_ids = np.concatenate(train_episode_ids_l)
@@ -276,25 +286,29 @@ def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_
 
     return train_dataloader, val_dataloader, norm_stats, train_dataset.is_sim
 
+
 def calibrate_linear_vel(base_action, c=None):
     if c is None:
-        c = 0.0 # 0.19
+        c = 0.0  # 0.19
     v = base_action[..., 0]
     w = base_action[..., 1]
     base_action = base_action.copy()
     base_action[..., 0] = v - c * w
     return base_action
 
+
 def smooth_base_action(base_action):
     return np.stack([
-        np.convolve(base_action[:, i], np.ones(5)/5, mode='same') for i in range(base_action.shape[1])
+        np.convolve(base_action[:, i], np.ones(5) / 5, mode='same') for i in range(base_action.shape[1])
     ], axis=-1).astype(np.float32)
+
 
 def preprocess_base_action(base_action):
     # base_action = calibrate_linear_vel(base_action)
     base_action = smooth_base_action(base_action)
 
     return base_action
+
 
 def postprocess_base_action(base_action):
     linear_vel, angular_vel = base_action
@@ -304,6 +318,7 @@ def postprocess_base_action(base_action):
     # if np.abs(linear_vel) < 0.05:
     #     linear_vel = 0
     return np.array([linear_vel, angular_vel])
+
 
 ### env utils
 
@@ -317,6 +332,7 @@ def sample_box_pose():
 
     cube_quat = np.array([1, 0, 0, 0])
     return np.concatenate([cube_position, cube_quat])
+
 
 def sample_insertion_pose():
     # Peg
@@ -343,6 +359,7 @@ def sample_insertion_pose():
 
     return peg_pose, socket_pose
 
+
 ### helper functions
 
 def compute_dict_mean(epoch_dicts):
@@ -355,14 +372,18 @@ def compute_dict_mean(epoch_dicts):
         result[k] = value_sum / num_items
     return result
 
+
 def detach_dict(d):
     new_d = dict()
     for k, v in d.items():
         new_d[k] = v.detach()
     return new_d
 
+
 def set_seed(seed):
     torch.manual_seed(seed)
     np.random.seed(seed)
-if __name__=="__main__":
+
+
+if __name__ == "__main__":
     load_data()

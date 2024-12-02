@@ -26,14 +26,6 @@ from detr.models.latent_model import Latent_Model_Transformer
 
 from sim_env import BOX_POSE
 
-os.environ["WANDB_MODE"] = "offline"
-os.environ["WANDB_API_KEY"] = "offline"
-import IPython
-
-
-# from pycallgraph import PyCallGraph
-# from pycallgraph.output import GraphvizOutput
-
 
 def get_auto_index(dataset_dir):
     max_idx = 1000
@@ -44,29 +36,33 @@ def get_auto_index(dataset_dir):
 
 
 def main(args):
-    set_seed(1)
+    # set_seed(1)
     # command line parameters
-    is_eval = args['eval']
-    ckpt_dir = args['ckpt_dir']
-    policy_class = args['policy_class']
-    onscreen_render = args['onscreen_render']
     task_name = args['task_name']
-    batch_size_train = args['batch_size']
-    batch_size_val = args['batch_size']
-    num_steps = args['num_steps']
-    eval_every = args['eval_every']
-    validate_every = args['validate_every']
-    save_every = args['save_every']
-    resume_ckpt_path = args['resume_ckpt_path']
-
-    # get task parameters
     is_sim = task_name[:4] == 'sim_'
     if is_sim or task_name == 'all':
         from constants import SIM_TASK_CONFIGS
         task_config = SIM_TASK_CONFIGS[task_name]
+    elif task_name == 'train':
+        from constants import RIGHT_ARM_TASK_CONFIGS
+        task_config = RIGHT_ARM_TASK_CONFIGS[task_name]
     else:
         from aloha_scripts.constants import TASK_CONFIGS
         task_config = TASK_CONFIGS[task_name]
+    is_eval = args['eval']
+    ckpt_dir = task_config['ckpt_dir']
+    policy_class = task_config['policy_class']
+    onscreen_render = args['onscreen_render']
+    batch_size_train = task_config['batch_size']
+    batch_size_val = task_config['batch_size']
+    num_steps = task_config['num_steps']
+    eval_every = args['eval_every']
+    validate_every = args['validate_every']
+    save_every = args['save_every']
+    resume_ckpt_path = task_config['resume_ckpt_path']
+
+    # get task parameters
+
     dataset_dir = task_config['dataset_dir']
     # num_episodes = task_config['num_episodes']
     episode_len = task_config['episode_len']
@@ -84,11 +80,11 @@ def main(args):
         enc_layers = 4
         dec_layers = 7
         nheads = 8
-        policy_config = {'lr': args['lr'],
-                         'num_queries': args['chunk_size'],
-                         'kl_weight': args['kl_weight'],
-                         'hidden_dim': args['hidden_dim'],
-                         'dim_feedforward': args['dim_feedforward'],
+        policy_config = {'lr': task_config['lr'],
+                         'num_queries': task_config['chunk_size'],
+                         'kl_weight': task_config['kl_weight'],
+                         'hidden_dim': task_config['hidden_dim'],
+                         'dim_feedforward': task_config['dim_feedforward'],
                          'lr_backbone': lr_backbone,
                          'backbone': backbone,
                          'enc_layers': enc_layers,
@@ -138,17 +134,18 @@ def main(args):
         'resume_ckpt_path': resume_ckpt_path,
         'episode_len': episode_len,
         'state_dim': state_dim,
-        'lr': args['lr'],
+        'lr': policy_config['lr'],
         'policy_class': policy_class,
         'onscreen_render': onscreen_render,
         'policy_config': policy_config,
         'task_name': task_name,
-        'seed': args['seed'],
+        'seed': task_config['seed'],
         'temporal_agg': args['temporal_agg'],
         'camera_names': camera_names,
         'real_robot': not is_sim,
-        'load_pretrain': args['load_pretrain'],
+        'load_pretrain': task_config['load_pretrain'],
         'actuator_config': actuator_config,
+
     }
 
     if not os.path.isdir(ckpt_dir):
@@ -664,13 +661,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--onscreen_render', action='store_true')
-    parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir', required=True)
-    parser.add_argument('--policy_class', action='store', type=str, help='policy_class, capitalize', required=True)
-    parser.add_argument('--task_name', action='store', type=str, help='task_name', required=True)
-    parser.add_argument('--batch_size', action='store', type=int, help='batch_size', required=True)
-    parser.add_argument('--seed', action='store', type=int, help='seed', required=True)
-    parser.add_argument('--num_steps', action='store', type=int, help='num_steps', required=True)
-    parser.add_argument('--lr', action='store', type=float, help='lr', required=True)
+    parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir', required=False)
+    parser.add_argument('--policy_class', action='store', type=str, help='policy_class, capitalize', required=False)
+    parser.add_argument('--task_name', action='store', type=str, help='task_name', required=False)
+    parser.add_argument('--batch_size', action='store', type=int, help='batch_size', required=False)
+    parser.add_argument('--seed', action='store', type=int, help='seed', required=False)
+    parser.add_argument('--num_steps', action='store', type=int, help='num_steps', required=False)
+    parser.add_argument('--lr', action='store', type=float, help='lr', required=False)
     parser.add_argument('--load_pretrain', action='store_true', default=False)
     parser.add_argument('--eval_every', action='store', type=int, default=500, help='eval_every', required=False)
     parser.add_argument('--validate_every', action='store', type=int, default=500, help='validate_every', required=False)

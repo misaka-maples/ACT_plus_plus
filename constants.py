@@ -5,6 +5,7 @@ import os
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 
 DATA_DIR = 'is_sim_0_compress_1_real'
+HDF5_DIR = 'hdf5_file\\save_dir'
 SIM_TASK_CONFIGS = {
     'sim_transfer_cube_scripted': {
         'dataset_dir': DATA_DIR,
@@ -56,7 +57,31 @@ SIM_TASK_CONFIGS = {
     },
 
 }
+RIGHT_ARM_TASK_CONFIGS = {
+    'train': {
+        'dataset_dir': HDF5_DIR,
+        'ckpt_dir': DATA_DIR,
+        'policy_class': 'ACT',
+        'task_name': 'right_arm_train',
+        'batch_size': 8,
+        'seed': 0,
+        'num_steps': 10,
+        'lr': 5e-4,
+        'num_episodes': None,
+        'episode_len': 400,
+        'camera_names': ['top', 'right_wrist'],
+        'chunk_size': 10,
+        'hidden_dim': 512,
+        'dim_feedforward': 3200,
+        'kl_weight': 10,
+        'eval_every': 500,
+        'save_every': 500,
+        'validate_every': 500,
+        'load_pretrain': False,
+        'resume_ckpt_path': DATA_DIR+'/policy_last.ckpt',
+    }
 
+}
 ### Simulation envs fixed constants
 DT = 0.02
 FPS = 50

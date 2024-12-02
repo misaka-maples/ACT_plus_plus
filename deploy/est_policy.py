@@ -1,7 +1,7 @@
 # from rem_test import get_env
 # get_env()
 from datetime import datetime
-import os,datetime
+import os, datetime
 # from deploy.rem_test import current_time
 from hdf5_edit import get_state
 from policy_test import ActionGenerator
@@ -12,9 +12,12 @@ import time
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from visualize_episodes import visualize_joints
-current_time=datetime.datetime.now()
+
+current_time = datetime.datetime.now()
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 STATE_NAMES = JOINT_NAMES + ["gripper"]
+
+
 # def visualize_joints(qpos_list, command_list, plot_path=None, ylim=None, label_overwrite=None):
 #     if label_overwrite:
 #         label1, label2 = label_overwrite
@@ -53,8 +56,10 @@ STATE_NAMES = JOINT_NAMES + ["gripper"]
 def main(args):
     actions = ActionGenerator(args)
     a = actions.get_action()
-    print(f"actions",a)
+    print(f"actions", a)
     return a
+
+
 def rand_action():
     qpos_list = np.random.randn(1, 7)  # 100 个状态
     # 生成一个包含每个相机名称的图像字典
@@ -68,9 +73,11 @@ def rand_action():
         image_tensor = torch.from_numpy(random_image).permute(2, 0, 1).float()
         image_dict[cam_name] = image_tensor
     return qpos_list, image_dict
+
+
 if __name__ == '__main__':
     camera_top_data, camera_right_data, qpos_list = get_state('/home/zhnh/Documents/xzx_projects/aloha_deploy/act-plus-plus/results/episode_0.hdf5')
-    actions_list=[]
+    actions_list = []
     loop_len = len(camera_right_data)
     for i in tqdm(range(loop_len)):
         # print(f"roll:{i}")
@@ -105,7 +112,7 @@ if __name__ == '__main__':
         actions = main(config)
         # actions=qpos
         actions = [i - 2 for i in actions]
-        actions[2]=-actions[2]
+        actions[2] = -actions[2]
         print(actions)
         actions_list.append(actions)
         power = actions[6]
@@ -120,10 +127,7 @@ if __name__ == '__main__':
         #
         # time.sleep(0.05)
 
-    path_save_image = os.path.join("/home/zhnh/Documents/xzx_projects/aloha_deploy/act-plus-plus/deploy","deploy_image",current_time.strftime("%m-%d %H:%M")+".png")
+    path_save_image = os.path.join("/home/zhnh/Documents/xzx_projects/aloha_deploy/act-plus-plus/deploy", "deploy_image", current_time.strftime("%m-%d %H:%M") + ".png")
     visualize_joints(qpos_list, actions_list, path_save_image)
 
     # print(actions_list)
-
-
-

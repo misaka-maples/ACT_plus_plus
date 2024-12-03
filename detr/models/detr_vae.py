@@ -206,7 +206,9 @@ class DETRVAE(nn.Module):
             all_cam_features = []
             all_cam_pos = []
             for cam_id, cam_name in enumerate(self.camera_names):
+                # features, pos = self.backbones[cam_id](image[:, cam_id])
                 features, pos = self.backbones[cam_id](image[:, cam_id])
+
                 features = features[0]  # 使用最后一层特征
                 pos = pos[0]
                 all_cam_features.append(self.input_proj(features))

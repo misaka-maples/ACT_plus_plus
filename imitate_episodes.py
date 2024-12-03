@@ -1,5 +1,4 @@
 import wandb
-
 import torch
 import numpy as np
 import os
@@ -21,12 +20,10 @@ from utils import sample_box_pose, sample_insertion_pose  # robot functions
 from utils import compute_dict_mean, set_seed, detach_dict, calibrate_linear_vel, postprocess_base_action  # helper functions
 from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
 from visualize_episodes import save_videos
-
 from detr.models.latent_model import Latent_Model_Transformer
-
 from sim_env import BOX_POSE
-
-
+wandb.init(project="act++")
+#63d8db0b669a1b1c712284f186093c19c278719c
 def get_auto_index(dataset_dir):
     max_idx = 1000
     for i in range(max_idx + 1):
@@ -43,7 +40,7 @@ def main(args):
     if is_sim or task_name == 'all':
         from constants import SIM_TASK_CONFIGS
         task_config = SIM_TASK_CONFIGS[task_name]
-    elif task_name == 'train':
+    elif task_name == 'train' or task_name == 'train_test':
         from constants import RIGHT_ARM_TASK_CONFIGS
         task_config = RIGHT_ARM_TASK_CONFIGS[task_name]
     else:
@@ -56,9 +53,9 @@ def main(args):
     batch_size_train = task_config['batch_size']
     batch_size_val = task_config['batch_size']
     num_steps = task_config['num_steps']
-    eval_every = args['eval_every']
-    validate_every = args['validate_every']
-    save_every = args['save_every']
+    eval_every = task_config['eval_every']
+    validate_every = task_config['validate_every']
+    save_every = task_config['save_every']
     resume_ckpt_path = task_config['resume_ckpt_path']
 
     # get task parameters
@@ -573,7 +570,7 @@ def train_bc(train_dataloader, val_dataloader, config):
     if config['load_pretrain']:
         loading_status = policy.deserialize(torch.load(os.path.join('/home/zfu/interbotix_ws/src/act/ckpts/pretrain_all', 'policy_step_50000_seed_0.ckpt')))
         print(f'loaded! {loading_status}')
-    if config['resume_ckpt_path'] is not None:
+    if os.path.exists(config['resume_ckpt_path']) is True:
         loading_status = policy.deserialize(torch.load(config['resume_ckpt_path']))
         print(f'Resume policy from: {config["resume_ckpt_path"]}, Status: {loading_status}')
     policy.cuda()
@@ -585,8 +582,8 @@ def train_bc(train_dataloader, val_dataloader, config):
     train_dataloader = repeater(train_dataloader)
     for step in tqdm(range(num_steps + 1)):
         # validation
-        if step % validate_every == 0:
-            print(f'\nvalidating')
+        if step % validate_every == 0 and step != 0:
+            print(f'\nValidating')
 
             with torch.inference_mode():
                 policy.eval()
@@ -598,7 +595,7 @@ def train_bc(train_dataloader, val_dataloader, config):
                         break
 
                 validation_summary = compute_dict_mean(validation_dicts)
-                print(validation_summary.keys())
+                print(f"validation_dicts:{validation_dicts}\nvalidation_summary:{validation_summary}")
                 epoch_val_loss = validation_summary['loss']
                 if epoch_val_loss < min_val_loss:
                     min_val_loss = epoch_val_loss
@@ -606,7 +603,7 @@ def train_bc(train_dataloader, val_dataloader, config):
             # print(f"1111111111111111111111111111111111111111111111")
             for k in list(validation_summary.keys()):
                 validation_summary[f'val_{k}'] = validation_summary.pop(k)
-                # wandb.log(validation_summary, step=step)
+                wandb.log(validation_summary, step=step)
             print(f'Val loss:   {epoch_val_loss:.5f}')
             summary_string = ''
             for k, v in validation_summary.items():
@@ -631,7 +628,7 @@ def train_bc(train_dataloader, val_dataloader, config):
         loss = forward_dict['loss']
         loss.backward()
         optimizer.step()
-        # wandb.log(forward_dict, step=step) # not great, make training 1.md-2% slower
+        wandb.log(forward_dict, step=step) # not great, make training 1.md-2% slower
 
         if step % save_every == 0:
             ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')
@@ -644,7 +641,7 @@ def train_bc(train_dataloader, val_dataloader, config):
     ckpt_path = os.path.join(ckpt_dir, f'policy_step_{best_step}_seed_{seed}.ckpt')
     torch.save(best_state_dict, ckpt_path)
     print(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at step {best_step}')
-
+    wandb.save("mymodel.h5")
     return best_ckpt_info
 
 

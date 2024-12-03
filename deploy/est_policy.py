@@ -12,7 +12,7 @@ import time
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from visualize_episodes import visualize_joints
-
+from constants import HDF5_DIR, DATA_DIR
 current_time = datetime.datetime.now()
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 STATE_NAMES = JOINT_NAMES + ["gripper"]
@@ -56,7 +56,7 @@ STATE_NAMES = JOINT_NAMES + ["gripper"]
 def main(args):
     actions = ActionGenerator(args)
     a = actions.get_action()
-    print(f"actions", a)
+
     return a
 
 
@@ -76,9 +76,10 @@ def rand_action():
 
 
 if __name__ == '__main__':
-    camera_top_data, camera_right_data, qpos_list = get_state('/home/zhnh/Documents/xzx_projects/aloha_deploy/act-plus-plus/results/episode_0.hdf5')
+    camera_top_data, camera_right_data, qpos_list = get_state(HDF5_DIR+
+        '\episode_0.hdf5')
     actions_list = []
-    loop_len = len(camera_right_data)
+    loop_len = len(camera_right_data)-100
     for i in tqdm(range(loop_len)):
         # print(f"roll:{i}")
         image_dict = {
@@ -91,7 +92,7 @@ if __name__ == '__main__':
             'qpos_list': qpos,
             'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
             'task_name': 'sim_transfer_cube_scripted',
-            'ckpt_dir': '/home/zhnh/Documents/xzx_projects/aloha_deploy/act-plus-plus/results',
+            'ckpt_dir': DATA_DIR,
             'policy_class': 'ACT',
             'kl_weight': 10,
             'chunk_size': 30,
@@ -113,7 +114,7 @@ if __name__ == '__main__':
         # actions=qpos
         actions = [i - 2 for i in actions]
         actions[2] = -actions[2]
-        print(actions)
+        print(f"actions", actions)
         actions_list.append(actions)
         power = actions[6]
         actions = [i * 180.0 / math.pi for i in actions[:6]]
@@ -127,7 +128,10 @@ if __name__ == '__main__':
         #
         # time.sleep(0.05)
 
-    path_save_image = os.path.join("/home/zhnh/Documents/xzx_projects/aloha_deploy/act-plus-plus/deploy", "deploy_image", current_time.strftime("%m-%d %H:%M") + ".png")
-    visualize_joints(qpos_list, actions_list, path_save_image)
+    path_save_image = os.path.join(DATA_DIR, "deploy_image")
+    if os.path.exists(path_save_image) is False:
+        os.mkdir(path_save_image)
+    image_path = os.path.join(path_save_image, current_time.strftime("%m-%d-%H-%M") + ".png")
+    visualize_joints(qpos_list, actions_list, image_path)
 
     # print(actions_list)

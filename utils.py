@@ -180,6 +180,8 @@ def get_norm_stats(dataset_path_list):
         all_qpos_data.append(torch.from_numpy(qpos))
         all_action_data.append(torch.from_numpy(action))
         all_episode_len.append(len(qpos))
+    if len(all_qpos_data) == 0:
+        raise "qpos_data is None"
     all_qpos_data = torch.cat(all_qpos_data, dim=0)
     all_action_data = torch.cat(all_action_data, dim=0)
 

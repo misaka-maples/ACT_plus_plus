@@ -22,7 +22,20 @@ from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
 from visualize_episodes import save_videos
 from detr.models.latent_model import Latent_Model_Transformer
 from sim_env import BOX_POSE
-wandb.init(project="act++")
+# settings = wandb.Settings(
+#     moitor_=False,       # 禁用 GPU 监控
+#     monitor_cpu=False,        # 禁用 CPU 监控
+#     monitor_network=False,    # 禁用网络监控
+#     monitor_disk=False,       # 禁用磁盘监控
+#     monitor_memory=False,     # 禁用内存监控（如果适用）
+#     monitor_system=False      # 禁用系统监控（综合）
+# )
+wandb.init(
+    project='act++',
+    name='loss_log',
+    # settings=settings
+
+)
 #63d8db0b669a1b1c712284f186093c19c278719c
 def get_auto_index(dataset_dir):
     max_idx = 1000
@@ -168,7 +181,7 @@ def main(args):
         print()
         exit()
 
-    train_dataloader, val_dataloader, stats, _ = load_data(dataset_dir, name_filter, camera_names, batch_size_train, batch_size_val, args['chunk_size'], args['skip_mirrored_data'], config['load_pretrain'], policy_class, stats_dir_l=stats_dir, sample_weights=sample_weights, train_ratio=train_ratio)
+    train_dataloader, val_dataloader, stats, _ = load_data(dataset_dir, name_filter, camera_names, batch_size_train, batch_size_val, task_config['chunk_size'], args['skip_mirrored_data'], config['load_pretrain'], policy_class, stats_dir_l=stats_dir, sample_weights=sample_weights, train_ratio=train_ratio)
 
     # save dataset stats
     stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
@@ -636,12 +649,10 @@ def train_bc(train_dataloader, val_dataloader, config):
 
     ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
     torch.save(policy.serialize(), ckpt_path)
-
     best_step, min_val_loss, best_state_dict = best_ckpt_info
     ckpt_path = os.path.join(ckpt_dir, f'policy_step_{best_step}_seed_{seed}.ckpt')
     torch.save(best_state_dict, ckpt_path)
     print(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at step {best_step}')
-    wandb.save("mymodel.h5")
     return best_ckpt_info
 
 
@@ -669,7 +680,7 @@ if __name__ == '__main__':
     parser.add_argument('--eval_every', action='store', type=int, default=500, help='eval_every', required=False)
     parser.add_argument('--validate_every', action='store', type=int, default=500, help='validate_every', required=False)
     parser.add_argument('--save_every', action='store', type=int, default=500, help='save_every', required=False)
-    parser.add_argument('--resume_ckpt_path', action='store', type=str, help='resume_ckpt_path', required=False)
+    parser.add_argument('--resume_ckpt_path', action='store', type=str, help='resume_ckpt_path', required=False, default=None)
     parser.add_argument('--skip_mirrored_data', action='store_true')
     parser.add_argument('--actuator_network_dir', action='store', type=str, help='actuator_network_dir', required=False)
     parser.add_argument('--history_len', action='store', type=int)

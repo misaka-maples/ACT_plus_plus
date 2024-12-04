@@ -181,7 +181,7 @@ class ActionGenerator:
         action = self._eval_bc_with_external_inputs(qpos_list, image_dict)
 
         end_time = time.time()
-        print(f"calculate time: {end_time - start_time}")
+        # print(f"calculate time: {end_time - start_time}")#===================================================
 
         return action
 

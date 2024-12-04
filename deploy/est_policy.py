@@ -77,9 +77,9 @@ def rand_action():
 
 if __name__ == '__main__':
     camera_top_data, camera_right_data, qpos_list = get_state(HDF5_DIR+
-        '\episode_0.hdf5')
+        '\episode_4.hdf5')
     actions_list = []
-    loop_len = len(camera_right_data)-100
+    loop_len = len(camera_right_data)
     for i in tqdm(range(loop_len)):
         # print(f"roll:{i}")
         image_dict = {
@@ -91,7 +91,7 @@ if __name__ == '__main__':
             'image_dict': image_dict,
             'qpos_list': qpos,
             'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
-            'task_name': 'sim_transfer_cube_scripted',
+            'task_name': 'train',
             'ckpt_dir': DATA_DIR,
             'policy_class': 'ACT',
             'kl_weight': 10,

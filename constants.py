@@ -5,8 +5,8 @@ import os
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 
 # DATA_DIR = 'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_model'
-DATA_DIR = "hdf5_file"
-HDF5_DIR = DATA_DIR+'\\save_dir'
+DATA_DIR = "D:\\aloha\ACT_plus_plus\\hdf5_file"
+HDF5_DIR = DATA_DIR + '\\save_dir'
 SIM_TASK_CONFIGS = {
     'sim_transfer_cube_scripted': {
         'dataset_dir': DATA_DIR,
@@ -79,7 +79,7 @@ RIGHT_ARM_TASK_CONFIGS = {
         'save_every': 500,
         'validate_every': 500,
         'load_pretrain': False,
-        'resume_ckpt_path': DATA_DIR +'p.',
+        'resume_ckpt_path': DATA_DIR + 'policy_best.ckpt',
         'loss_save_every': 500,
     },
     'train_test': {

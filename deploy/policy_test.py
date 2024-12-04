@@ -86,7 +86,7 @@ class ActionGenerator:
         返回：
         - policy: 加载后的策略模型。
         """
-        ckpt_path = os.path.join(self.ckpt_dir, 'policy_last.ckpt')
+        ckpt_path = os.path.join(self.ckpt_dir, 'policy_best.ckpt')
         policy = make_policy(self.policy_class, self.policy_config)
         policy.deserialize(torch.load(ckpt_path))
         policy.cuda()

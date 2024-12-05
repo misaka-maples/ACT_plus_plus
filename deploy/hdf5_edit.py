@@ -1,4 +1,8 @@
+import copy
 import random
+
+import matplotlib.pyplot as plt
+
 from constants import HDF5_DIR, DATA_DIR
 import h5py
 import cv2
@@ -6,6 +10,8 @@ import os
 import fnmatch
 import numpy as np
 from constants import RIGHT_ARM_TASK_CONFIGS
+from constants import HDF5_DIR
+import visualize_episodes
 
 camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
 max_timesteps = 0
@@ -65,7 +71,7 @@ def get_state(file_path):
                 camera_top_data_list = camera_top_data
                 camera_right_data_list = camera_right_data
     except Exception as e:
-        print(f"Error saving video:\n {e}")
+        print(f"Error load hdf5 file:\n {e}")
     return camera_top_data_list, camera_right_data_list, qpos, action
 
 
@@ -155,7 +161,7 @@ def modify_hdf5(file_path, compress=None, truncate_ranges=None):
             camera_top_data = truncate_data(camera_top_data, 'top')
             camera_right_data = truncate_data(camera_right_data, 'right_wrist')
             qpos = truncate_data(qpos, 'qpos')
-            actions = truncate_data(actions, 'actions')
+            actions = truncate_data(actions, 'action')
 
             # 创建新的路径并写入数据
             new_paths_top = ['observations/images/top']
@@ -343,13 +349,13 @@ def read_image(image_path, decompress=False):
         return image_data
 
 
-def save_hdf5(file_path, joints_nums, episode_idx, data_dict):
+def save_hdf5(file_path, joints_nums, episode_idx, data_dict, reshape_hdf5_path):
     # 获取最大时间步数
 
     max_timesteps = min(len(get_image_paths(file_path, "camera_right_wrist", ".jpg")), len(get_image_paths(file_path, "camera_top", ".jpg")), len(data_dict['/observations/qpos']), len(data_dict['/action']))
     # print(max_timesteps)
     # 确保目录存在
-    reshape_hdf5_path = os.path.join(DATA_DIR, "reshape_hdf5")
+    # reshape_hdf5_path = os.path.join(DATA_DIR, "reshape_hdf5")
     os.makedirs(reshape_hdf5_path, exist_ok=True)
 
     # 设置 HDF5 文件路径
@@ -400,9 +406,9 @@ def get_image_from_folder(image_directory, image_prefix, image_extension):
 def batch_save_hdf5():
     for i in range(20):
         if i > 8:
-            image_directory = f"F:\origin_data\\11_27\\{i+1}"  # 图像文件夹路径
+            image_directory = f"F:\\origin_data\\11_27\\{i + 1}"  # 图像文件夹路径
         else:
-            image_directory = f"F:\origin_data\\11_27\\0{i+1}"  # 图像文件夹路径
+            image_directory = f"F:\\origin_data\\11_27\\0{i + 1}"  # 图像文件夹路径
         right_image = "camera_right_wrist"  # 图像文件名前缀
         top_image = "camera_top"
         image_extension = ".jpg"  # 图像扩展名
@@ -412,26 +418,30 @@ def batch_save_hdf5():
         top__ = get_image_from_folder(image_directory, top_image, image_extension)
         # print(len(top__[:max_timesteps]))
         right__ = get_image_from_folder(image_directory, right_image, image_extension)
-        camera_top_data, camera_right_data, qpos_list, action_ = get_state(f"F:\hdf5_file\save_dir\origin" + f'\\episode_{i}.hdf5')
+        camera_top_data, camera_right_data, qpos_list, action_ = get_state(f"F:\\hdf5_file\\save_dir\\origin" + f'\\episode_{i}.hdf5')
+        # print(action_.shape)
 
+        qpos_list = np.vstack([np.zeros((2, 7)), qpos_list])
+        action_ = np.vstack([action_, np.zeros((1, 7))])
         max_timesteps = min(len(get_image_paths(image_directory, "camera_right_wrist", ".jpg")), len(get_image_paths(image_directory, "camera_top", ".jpg")), len(qpos_list), len(action_))
-
+        # print(max_timesteps, action_.shape)
         # 获取所有图像路径
         data_dict = {
-            '/observations/qpos': qpos_list,
-            'observations/qvel':[],
+            '/observations/qpos': qpos_list[:max_timesteps],
+            # 'observations/qvel':[],
             '/observations/images/top': top__[:max_timesteps],
             '/observations/images/right_wrist': right__[:max_timesteps],
-            '/action': action_,
+            '/action': action_[:max_timesteps],
         }
-        # print(f"qpos_shape: {len(data_dict['/observations/qpos'])}\ntop_shape: {len(data_dict['/observations/images/top'])}\nright_shape: {len(data_dict['/observations/images/right_wrist'])}\naction_shape: {len(data_dict['/action'])}")
-        save_hdf5(image_directory, 7, i, data_dict)
+
+        print(f"qpos_shape: {len(data_dict['/observations/qpos'])}\ntop_shape: {len(data_dict['/observations/images/top'])}\nright_shape: {len(data_dict['/observations/images/right_wrist'])}\naction_shape: {len(data_dict['/action'])}")
+        save_hdf5(image_directory, 7, i, data_dict, reshape_hdf5_path=DATA_DIR+'\\reshape_hdf5_qpos_2')
 
 
 if __name__ == '__main__':
     # truncate_ranges = {
     #     'top': (45, 100),
-    #     'actions': (45, 100),
+    #     'action': (45, 100),
     #     'right_wrist': (45, 100),
     #     'qpos': (45, 100),
     # }
@@ -461,4 +471,19 @@ if __name__ == '__main__':
     # save_hdf5(image_directory, 7, 0, data_dict)
     # print(i.shape)
     # print(image_paths)
-    batch_save_hdf5()
+    # batch_save_hdf5()
+
+    _, _, qpos, actions = get_state(DATA_DIR + "\\reshape_hdf5_qpos_2\\episode_0.hdf5")
+    # 假设 actions 是一个二维列表或数组
+    actions = [i - 2 for i in actions]
+
+    # 打印修改前的第三列数据
+    # print(len([i[2] for i in actions]))
+
+    # 对每个数据的第三位取反
+    actions = [[*i[:2], -i[2], *i[3:]] for i in actions]
+
+    # 打印修改后的第三列数据
+    # print([i[2] for i in actions])
+    # 将数据传入 visualize 函数
+    visualize_episodes.visualize_joints(qpos, actions, DATA_DIR + '\\temp_-.png',)

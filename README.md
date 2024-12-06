@@ -144,3 +144,29 @@ python3 imitate_episodes.py --task_name sim_transfer_cube_scripted --ckpt_dir <c
 #ModuleNotFoundError: No module named 'robomimic.utils.log_utils'
 #检查robomimic.utils.log_utils是否存在，不存在重新拉取
 ```
+### colab部署
+```
+#安装git
+apt-get install git
+#克隆项目
+git clone https://github.com/misaka-maples/ACT_plus_plus.git
+#训练时需要配置数据路径，在constants.py
+!pip install -e /content/ACT_plus_plus/robomimic
+
+#报错 robomimic问题考虑重新编译这个库
+!pip install pyquaternion
+!pip install pyyaml
+!pip install rospkg
+!pip install pexpect
+!pip install mujoco==2.3.7
+!pip install dm_control==1.0.14
+!pip install opencv-python
+!pip install matplotlib
+!pip install einops
+!pip install packaging
+!pip install h5py
+!pip install ipython 
+!pip install diffusers
+!pip install wandb
+!python /content/ACT_plus_plus/imitate_episodes.py --task_name train
+```

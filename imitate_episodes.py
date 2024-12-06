@@ -22,6 +22,8 @@ from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
 from visualize_episodes import save_videos
 from detr.models.latent_model import Latent_Model_Transformer
 from sim_env import BOX_POSE
+import os
+os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
 # settings = wandb.Settings(
 #     moitor_=False,       # 禁用 GPU 监控
 #     monitor_cpu=False,        # 禁用 CPU 监控
@@ -30,6 +32,7 @@ from sim_env import BOX_POSE
 #     monitor_memory=False,     # 禁用内存监控（如果适用）
 #     monitor_system=False      # 禁用系统监控（综合）
 # )
+
 wandb.init(
     project='act++',
     name='loss_log',

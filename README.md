@@ -24,11 +24,10 @@
 apt-get install git
 #克隆项目
 git clone https://github.com/misaka-maples/ACT_plus_plus.git
-
-# 创建并激活 Conda 虚拟环境
-conda create -n aloha python=3.8.10
-conda activate aloha
- 
+#训练时需要配置数据路径，在constants.py
+!pip install -e /content/ACT_plus_plus/robomimic
+!python /content/ACT_plus_plus/imitate_episodes.py --task_name train
+#报错 robomimic问题考虑重新编译这个库
 # 安装依赖项
 pip install pyquaternion
 pip install pyyaml
@@ -50,7 +49,22 @@ pip install -e #文件根目录
 ### 暂时不需要
 - 还需要安装[robomimic](https://github.com/ARISE-Initiative/robomimic.git -b diffusion-policy-mg)（diffusion-policy-mg），通过 `pip install -e .`
 - 需要安装detr、mobile_aloha、robomimic，执行：`python setup.py install`
-
+```
+!pip install pyquaternion
+!pip install pyyaml
+!pip install rospkg
+!pip install pexpect
+!pip install mujoco==2.3.7
+!pip install dm_control==1.0.14
+!pip install opencv-python
+!pip install matplotlib
+!pip install einops
+!pip install packaging
+!pip install h5py
+!pip install ipython 
+!pip install diffusers
+!pip install wandb
+```
 ### 硬件安装
 
 #### 启动相机流程

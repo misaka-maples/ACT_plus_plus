@@ -43,6 +43,7 @@ pip install packaging
 pip install h5py
 pip install ipython 
 pip install diffusers
+pip install wandb
 pip install torch==2.0.1+cu118 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
 
 ```
@@ -122,4 +123,10 @@ python3 imitate_episodes.py --task_name sim_transfer_cube_scripted --ckpt_dir <c
 
 ### [ACT调优建议](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing)
 如果您的ACT策略很不稳定或在回合中途停顿，只需训练更长时间！成功率和流畅性通常会在损失平稳后进一步提升。
-
+### debug
+```
+#  File "/mnt/workspace/temp/ACT_plus_plus/robomimic/robomimic/macros.py", line 52, in <module>
+#    from robomimic.utils.log_utils import log_warning
+#ModuleNotFoundError: No module named 'robomimic.utils.log_utils'
+#检查robomimic.utils.log_utils是否存在，不存在重新拉取
+```

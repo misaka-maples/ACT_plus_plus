@@ -1,7 +1,34 @@
 # from rem_test import get_env
 # get_env()
 from datetime import datetime
-import os, datetime
+import os, datetime, sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
+def get_env_():
+    import sys
+    import os
+
+    # 当前文件的目录
+    current_dir = os.path.dirname(__file__)
+
+    # 上一级目录
+    parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+
+    # 要添加的目录
+    dirs_to_add = [
+        parent_dir,  # 项目根目录
+        os.path.join(parent_dir, 'detr'),  # 上一级的
+        os.path.join(parent_dir, 'robomimic')
+    ]
+
+    # 动态添加目录到 sys.path
+    for directory in dirs_to_add:
+        if directory not in sys.path:  # 避免重复添加
+            sys.path.append(directory)
+
+get_env_()
 # from deploy.rem_test import current_time
 from hdf5_edit import get_state
 from policy_test import ActionGenerator
@@ -14,6 +41,7 @@ from tqdm import tqdm
 from visualize_episodes import visualize_joints
 from constants import HDF5_DIR, DATA_DIR
 from hdf5_edit import get_image_from_folder
+
 current_time = datetime.datetime.now()
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 STATE_NAMES = JOINT_NAMES + ["gripper"]
@@ -77,18 +105,18 @@ def rand_action():
 
 
 if __name__ == '__main__':
-    camera_top_data, camera_right_data, qpos_list, action_ = get_state(HDF5_DIR+
-        '\episode_4.hdf5')
+    camera_top_data, camera_right_data, qpos_list, action_ = get_state(HDF5_DIR +
+                                                                       '\episode_4.hdf5')
     actions_list = []
-    loss=[]
+    loss = []
     loop_len = len(camera_right_data)
     image_directory = r"D:\aloha\ACT_plus_plus\hdf5_file\04"  # 图像文件夹路径
     right_image = "camera_right_wrist"  # 图像文件名前缀
     top_image = "camera_top"
     image_extension = ".jpg"  # 图像扩展名
     num_images = 137  # 图像数量
-    top__ = get_image_from_folder(image_directory, top_image, image_extension, num_images)
-    right__ = get_image_from_folder(image_directory, right_image, image_extension, num_images)
+    top__ = get_image_from_folder(image_directory, top_image, image_extension)
+    right__ = get_image_from_folder(image_directory, right_image, image_extension)
     for i in tqdm(range(loop_len)):
         # print(f"roll:{i}")
         image_dict = {
@@ -131,7 +159,7 @@ if __name__ == '__main__':
         actions[2] = -actions[2]
         # print(f"actions", actions)##====================================================================
         actions_list.append(actions)
-        print(f"actions: {actions[2]},action_:{-action_[i][2]+2}")
+        # print(f"actions: {actions[2]},action_:{-action_[i][2] + 2}")
         # loss.append((actions - action_[i]-2) ** 2)
         power = actions[6]
         actions = [i * 180.0 / math.pi for i in actions[:6]]
@@ -149,7 +177,7 @@ if __name__ == '__main__':
     if os.path.exists(path_save_image) is False:
         os.mkdir(path_save_image)
     image_path = os.path.join(path_save_image, current_time.strftime("%m-%d-%H-%M") + ".png")
-    loss_apth = os.path.join(path_save_image, 'loss'+current_time.strftime("%m-%d-%H-%M") + ".png")
+    loss_apth = os.path.join(path_save_image, 'loss' + current_time.strftime("%m-%d-%H-%M") + ".png")
     visualize_joints(qpos_list, actions_list, image_path, label_overwrite={'qpos', 'action'})
     plt.figure
     plt.plot(loss)

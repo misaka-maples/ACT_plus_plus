@@ -3,7 +3,7 @@
 from datetime import datetime
 import os, datetime, sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 def get_env_():

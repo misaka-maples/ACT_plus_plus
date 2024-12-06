@@ -45,9 +45,9 @@ pip install ipython
 pip install diffusers
 pip install wandb
 pip install torch==2.0.1+cu118 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
-
+pip install -e #文件根目录
 ```
-
+### 暂时不需要
 - 还需要安装[robomimic](https://github.com/ARISE-Initiative/robomimic.git -b diffusion-policy-mg)（diffusion-policy-mg），通过 `pip install -e .`
 - 需要安装detr、mobile_aloha、robomimic，执行：`python setup.py install`
 

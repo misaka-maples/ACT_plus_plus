@@ -88,7 +88,7 @@ class ActionGenerator:
         """
         ckpt_path = os.path.join(self.ckpt_dir, 'policy_best.ckpt')
         policy = make_policy(self.policy_class, self.policy_config)
-        policy.deserialize(torch.load(ckpt_path))
+        policy.deserialize(torch.load(ckpt_path, weights_only=True))
         policy.cuda()
         policy.eval()
         return policy

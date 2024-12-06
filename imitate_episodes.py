@@ -1,3 +1,27 @@
+
+def get_env_():
+    import sys
+    import os
+
+    # 当前文件的目录
+    current_dir = os.path.dirname(__file__)
+
+    # 上一级目录
+    parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+
+    # 要添加的目录
+    dirs_to_add = [
+        parent_dir,  # 项目根目录
+        os.path.join(parent_dir, 'detr'),  # 上一级的
+        os.path.join(parent_dir, 'robomimic')
+    ]
+
+    # 动态添加目录到 sys.path
+    for directory in dirs_to_add:
+        if directory not in sys.path:  # 避免重复添加
+            sys.path.append(directory)
+
+get_env_()
 import wandb
 import torch
 import numpy as np
@@ -280,7 +304,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
     # load policy and stats
     ckpt_path = os.path.join(ckpt_dir, ckpt_name)
     policy = make_policy(policy_class, policy_config)
-    loading_status = policy.deserialize(torch.load(ckpt_path))
+    loading_status = policy.deserialize(torch.load(ckpt_path, weights_only=True))
     print(loading_status)
     policy.cuda()
     policy.eval()

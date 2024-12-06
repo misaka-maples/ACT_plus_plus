@@ -12,12 +12,10 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import transforms
 from torchvision import models as vision_models
+from torchvision import transforms
 
 import robomimic.utils.tensor_utils as TensorUtils
-import robomimic.utils.obs_utils as ObsUtils
-
 
 CONV_ACTIVATIONS = {
     "relu": nn.ReLU,
@@ -89,20 +87,11 @@ class Sequential(torch.nn.Sequential, Module):
     """
     Compose multiple Modules together (defined above).
     """
-    def __init__(self, *args, has_output_shape = True):
-        """
-        Args:
-            has_output_shape (bool, optional): indicates whether output_shape can be called on the Sequential module.
-                torch.nn modules do not have an output_shape, but Modules (defined above) do. Defaults to True.
-        """
+    def __init__(self, *args):
         for arg in args:
-            if has_output_shape:
-                assert isinstance(arg, Module)
-            else:
-                assert isinstance(arg, nn.Module)
+            assert isinstance(arg, Module)
         torch.nn.Sequential.__init__(self, *args)
         self.fixed = False
-        self.has_output_shape = has_output_shape
 
     def output_shape(self, input_shape=None):
         """
@@ -116,8 +105,6 @@ class Sequential(torch.nn.Sequential, Module):
         Returns:
             out_shape ([int]): list of integers corresponding to output shape
         """
-        if not self.has_output_shape:
-            raise NotImplementedError("Output shape is not defined for this module")
         out_shape = input_shape
         for module in self:
             out_shape = module.output_shape(out_shape)
@@ -464,20 +451,6 @@ class ConvBase(Module):
     def __init__(self):
         super(ConvBase, self).__init__()
 
-    def __init_subclass__(cls, **kwargs):
-        """
-        Hook method to automatically register all valid subclasses so we can keep track of valid observation encoders
-        in a global dict.
-
-        This global dict stores mapping from observation encoder network name to class.
-        We keep track of these registries to enable automated class inference at runtime, allowing
-        users to simply extend our base encoder class and refer to that class in string form
-        in their config, without having to manually register their class internally.
-        This also future-proofs us for any additional encoder classes we would
-        like to add ourselves.
-        """
-        ObsUtils.register_encoder_backbone(cls)
-
     # dirty hack - re-implement to pass the buck onto subclasses from ABC parent
     def output_shape(self, input_shape):
         """
@@ -600,7 +573,7 @@ class R3MConv(ConvBase):
             transforms.CenterCrop(224),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         )
-        self.nets = Sequential(*([preprocess] + list(net.module.convnet.children())), has_output_shape = False)
+        self.nets = Sequential(*([preprocess] + list(net.module.convnet.children())))
         if freeze:
             self.nets.freeze()
 
@@ -866,11 +839,6 @@ class Conv1dBase(Module):
 
         # Get activation requested
         activation = CONV_ACTIVATIONS[activation]
-        
-        # Add layer kwargs
-        conv_kwargs["out_channels"] = out_channels
-        conv_kwargs["kernel_size"] = kernel_size
-        conv_kwargs["stride"] = stride
 
         # Generate network
         self.n_layers = len(out_channels)

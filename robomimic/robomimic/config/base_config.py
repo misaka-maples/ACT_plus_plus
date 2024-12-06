@@ -122,6 +122,10 @@ class BaseConfig(Config):
         self.experiment.rollout.warmstart = 0                       # number of epochs to wait before starting rollouts
         self.experiment.rollout.terminate_on_success = True         # end rollout early after task success
 
+        # for updating the evaluation env meta data
+        self.experiment.env_meta_update_dict = Config()
+        self.experiment.env_meta_update_dict.do_not_lock_keys()
+
     def train_config(self):
         """
         This function populates the `config.train` attribute of the config, which 
@@ -186,6 +190,26 @@ class BaseConfig(Config):
             "dones",
         )
 
+        self.train.action_keys = ["actions"]
+
+        # specifing each action keys to load and their corresponding normalization/conversion requirement
+        # e.g. for dataset keys "action/eef_pos" and "action/eef_rot"
+        # the desired value of self.train.action_config is: 
+        # {
+        #   "action/eef_pos": {
+        #       "normalization": "min_max",
+        #       "rot_conversion: None  
+        #   },
+        #   "action/eef_rot": {
+        #       "normalization": None,
+        #       "rot_conversion: "axis_angle_to_6d"
+        #   }
+        # }
+        # self.train.action_config.actions.normalization = None # "min_max"
+        # self.train.action_config.actions.rot_conversion = None # "axis_angle_to_6d"
+        self.train.action_config = {}
+        # self.train.action_config.do_not_lock_keys()
+
         # one of [None, "last"] - set to "last" to include goal observations in each batch
         self.train.goal_mode = None
 
@@ -195,6 +219,8 @@ class BaseConfig(Config):
         self.train.batch_size = 100     # batch size
         self.train.num_epochs = 2000    # number of training epochs
         self.train.seed = 1             # seed for training (for reproducibility)
+
+        self.train.data_format = "robomimic" # either "robomimic" or "r2d2"
 
     def algo_config(self):
         """

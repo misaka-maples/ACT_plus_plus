@@ -14,6 +14,8 @@ class EnvType:
     ROBOSUITE_TYPE = 1
     GYM_TYPE = 2
     IG_MOMART_TYPE = 3
+    REAL_TYPE = 6
+    GPRS_REAL_TYPE = 7
 
 
 class EnvBase(abc.ABC):
@@ -25,7 +27,7 @@ class EnvBase(abc.ABC):
         render=False, 
         render_offscreen=False, 
         use_image_obs=False, 
-        use_depth_obs=False, 
+        use_depth_obs=False,
         postprocess_visual_obs=True, 
         **kwargs,
     ):
@@ -210,12 +212,10 @@ class EnvBase(abc.ABC):
             camera_height (int): camera height for all cameras
             camera_width (int): camera width for all cameras
             reward_shaping (bool): if True, use shaped environment rewards, else use sparse task completion rewards
-            render (bool or None): optionally override rendering behavior. Defaults to False.
-            render_offscreen (bool or None): optionally override rendering behavior. The default value is True if
-                @camera_names is non-empty, False otherwise.
-            use_image_obs (bool or None): optionally override rendering behavior. The default value is True if
-                @camera_names is non-empty, False otherwise.
-            use_depth_obs (bool): if True, use depth observations
+            render (bool or None): optionally override rendering behavior
+            render_offscreen (bool or None): optionally override rendering behavior
+            use_image_obs (bool or None): optionally override rendering behavior
+            use_depth_obs (bool or None): optionally override rendering behavior
 
         Returns:
             env (EnvBase instance)

@@ -39,7 +39,7 @@ class EnvGibsonMOMART(EB.EnvBase):
             render=False,
             render_offscreen=False,
             use_image_obs=False,
-            use_depth_obs=False,
+            use_depth_obs=False, 
             image_height=None,
             image_width=None,
             physics_timestep=1./240.,
@@ -60,10 +60,6 @@ class EnvGibsonMOMART(EB.EnvBase):
 
             use_image_obs (bool): if True, environment is expected to render rgb image observations
                 on every env.step call. Set this to False for efficiency reasons, if image
-                observations are not required.
-
-            use_depth_obs (bool): if True, environment is expected to render depth image observations
-                on every env.step call. Set this to False for efficiency reasons, if depth
                 observations are not required.
 
             render_mode (str): How to run simulation rendering. Options are {"pbgui", "iggui", or "headless"}
@@ -339,7 +335,7 @@ class EnvGibsonMOMART(EB.EnvBase):
             render=None, 
             render_offscreen=None, 
             use_image_obs=None, 
-            use_depth_obs=None, 
+            use_depth_obs=None,
             **kwargs,
     ):
         """

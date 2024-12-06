@@ -82,7 +82,7 @@ def get_demos_for_filter_key(hdf5_path, filter_key):
     return demo_keys
 
 
-def get_env_metadata_from_dataset(dataset_path, set_env_specific_obs_processors=True):
+def get_env_metadata_from_dataset(dataset_path, ds_format="robomimic", set_env_specific_obs_processors=True):
     """
     Retrieves env metadata from dataset.
 
@@ -101,9 +101,14 @@ def get_env_metadata_from_dataset(dataset_path, set_env_specific_obs_processors=
             :`'type'`: type of environment, should be a value in EB.EnvType
             :`'env_kwargs'`: dictionary of keyword arguments to pass to environment constructor
     """
-    dataset_path = os.path.expanduser(dataset_path)
+    dataset_path = os.path.expandvars(os.path.expanduser(dataset_path))
     f = h5py.File(dataset_path, "r")
-    env_meta = json.loads(f["data"].attrs["env_args"])
+    if ds_format == "robomimic":
+        env_meta = json.loads(f["data"].attrs["env_args"])
+    elif ds_format == "r2d2":
+        env_meta = dict(f.attrs)
+    else:
+        raise ValueError
     f.close()
     if set_env_specific_obs_processors:
         # handle env-specific custom observation processing logic
@@ -111,12 +116,13 @@ def get_env_metadata_from_dataset(dataset_path, set_env_specific_obs_processors=
     return env_meta
 
 
-def get_shape_metadata_from_dataset(dataset_path, all_obs_keys=None, verbose=False):
+def get_shape_metadata_from_dataset(dataset_path, action_keys, all_obs_keys=None, ds_format="robomimic", verbose=False):
     """
     Retrieves shape metadata from dataset.
 
     Args:
         dataset_path (str): path to dataset
+        action_keys (list): list of all action key strings
         all_obs_keys (list): list of all modalities used by the model. If not provided, all modalities
             present in the file are used.
         verbose (bool): if True, include print statements
@@ -128,36 +134,67 @@ def get_shape_metadata_from_dataset(dataset_path, all_obs_keys=None, verbose=Fal
             :`'all_shapes'`: dictionary that maps observation key string to shape
             :`'all_obs_keys'`: list of all observation modalities used
             :`'use_images'`: bool, whether or not image modalities are present
-            :`'use_depths'`: bool, whether or not depth modalities are present
     """
 
     shape_meta = {}
 
     # read demo file for some metadata
-    dataset_path = os.path.expanduser(dataset_path)
+    dataset_path = os.path.expandvars(os.path.expanduser(dataset_path))
     f = h5py.File(dataset_path, "r")
-    demo_id = list(f["data"].keys())[0]
-    demo = f["data/{}".format(demo_id)]
+    
+    if ds_format == "robomimic":
+        demo_id = list(f["data"].keys())[0]
+        demo = f["data/{}".format(demo_id)]
+        
+        for key in action_keys:
+            assert len(demo[key].shape) == 2 # shape should be (B, D)
+        action_dim = sum([demo[key].shape[1] for key in action_keys])
+        shape_meta["ac_dim"] = action_dim
 
-    # action dimension
-    shape_meta['ac_dim'] = f["data/{}/actions".format(demo_id)].shape[1]
+        # observation dimensions
+        all_shapes = OrderedDict()
 
-    # observation dimensions
-    all_shapes = OrderedDict()
+        if all_obs_keys is None:
+            # use all modalities present in the file
+            all_obs_keys = [k for k in demo["obs"]]
 
-    if all_obs_keys is None:
-        # use all modalities present in the file
-        all_obs_keys = [k for k in demo["obs"]]
+        for k in sorted(all_obs_keys):
+            initial_shape = demo["obs/{}".format(k)].shape[1:]
+            if verbose:
+                print("obs key {} with shape {}".format(k, initial_shape))
+            # Store processed shape for each obs key
+            all_shapes[k] = ObsUtils.get_processed_shape(
+                obs_modality=ObsUtils.OBS_KEYS_TO_MODALITIES[k],
+                input_shape=initial_shape,
+            )
+    elif ds_format == "r2d2":
+        for key in action_keys:
+            assert len(f[key].shape) == 2 # shape should be (B, D)
+        action_dim = sum([f[key].shape[1] for key in action_keys])
+        shape_meta["ac_dim"] = action_dim
+        
+        # observation dimensions
+        all_shapes = OrderedDict()
 
-    for k in sorted(all_obs_keys):
-        initial_shape = demo["obs/{}".format(k)].shape[1:]
-        if verbose:
-            print("obs key {} with shape {}".format(k, initial_shape))
-        # Store processed shape for each obs key
-        all_shapes[k] = ObsUtils.get_processed_shape(
-            obs_modality=ObsUtils.OBS_KEYS_TO_MODALITIES[k],
-            input_shape=initial_shape,
-        )
+        # hack all relevant obs shapes for now
+        for k in [
+            "robot_state/cartesian_position",
+            "robot_state/gripper_position",
+            "robot_state/joint_positions",
+            "camera/image/hand_camera_image",
+            "camera/image/varied_camera_1_image",
+            "camera/image/varied_camera_2_image",
+        ]:
+            initial_shape = f["observation/{}".format(k)].shape[1:]
+            if len(initial_shape) == 0:
+                initial_shape = (1,)
+
+            all_shapes[k] = ObsUtils.get_processed_shape(
+                obs_modality=ObsUtils.OBS_KEYS_TO_MODALITIES[k],
+                input_shape=initial_shape,
+            )
+    else:
+        raise ValueError
 
     f.close()
 
@@ -167,6 +204,30 @@ def get_shape_metadata_from_dataset(dataset_path, all_obs_keys=None, verbose=Fal
     shape_meta['use_depths'] = ObsUtils.has_modality("depth", all_obs_keys)
 
     return shape_meta
+
+
+def get_intervention_segments(interventions):
+    """
+    Splits interventions list into a list of start and end indices (windows) of continuous intervention segments.
+    """
+    interventions = interventions.reshape(-1).astype(int)
+    # pad before and after to make it easy to count starting and ending intervention segments
+    expanded_ints = [False] + interventions.astype(bool).tolist() + [False]
+    start_inds = []
+    end_inds = []
+    for i in range(1, len(expanded_ints)):
+        if expanded_ints[i] and (not expanded_ints[i - 1]):
+            # low to high edge means start of new window
+            start_inds.append(i - 1) # record index in original array which is one less (since we added an element to the beg)
+        elif (not expanded_ints[i]) and expanded_ints[i - 1]:
+            # high to low edge means end of previous window
+            end_inds.append(i - 1) # record index in original array which is one less (since we added an element to the beg)
+
+    # run some sanity checks
+    assert len(start_inds) == len(end_inds), "missing window edge"
+    assert np.all([np.sum(interventions[s : e]) == (e - s) for s, e in zip(start_inds, end_inds)]), "window computation covers non-interventions"
+    assert sum([np.sum(interventions[s : e]) for s, e in zip(start_inds, end_inds)]) == np.sum(interventions), "window computation does not cover all interventions"
+    return list(zip(start_inds, end_inds))
 
 
 def load_dict_from_checkpoint(ckpt_path):
@@ -179,7 +240,7 @@ def load_dict_from_checkpoint(ckpt_path):
     Returns:
         ckpt_dict (dict): Loaded checkpoint dictionary.
     """
-    ckpt_path = os.path.expanduser(ckpt_path)
+    ckpt_path = os.path.expandvars(os.path.expanduser(ckpt_path))
     if not torch.cuda.is_available():
         ckpt_dict = torch.load(ckpt_path, map_location=lambda storage, loc: storage)
     else:
@@ -396,6 +457,13 @@ def policy_from_checkpoint(device=None, ckpt_path=None, ckpt_dict=None, verbose=
             for k in obs_normalization_stats[m]:
                 obs_normalization_stats[m][k] = np.array(obs_normalization_stats[m][k])
 
+    # maybe restore action normalization stats
+    action_normalization_stats = ckpt_dict.get("action_normalization_stats", None)
+    if action_normalization_stats is not None:
+        for m in action_normalization_stats:
+            for k in action_normalization_stats[m]:
+                action_normalization_stats[m][k] = np.array(action_normalization_stats[m][k])
+
     if device is None:
         # get torch device
         device = TorchUtils.get_torch_device(try_to_use_cuda=config.train.cuda)
@@ -410,7 +478,11 @@ def policy_from_checkpoint(device=None, ckpt_path=None, ckpt_dict=None, verbose=
     )
     model.deserialize(ckpt_dict["model"])
     model.set_eval()
-    model = RolloutPolicy(model, obs_normalization_stats=obs_normalization_stats)
+    model = RolloutPolicy(
+        model,
+        obs_normalization_stats=obs_normalization_stats,
+        action_normalization_stats=action_normalization_stats
+    )
     if verbose:
         print("============= Loaded Policy =============")
         print(model)
@@ -448,14 +520,13 @@ def env_from_checkpoint(ckpt_path=None, ckpt_dict=None, env_name=None, render=Fa
     # create env from saved metadata
     env = EnvUtils.create_env_from_metadata(
         env_meta=env_meta, 
-        env_name=env_name, 
         render=render, 
         render_offscreen=render_offscreen,
-        use_image_obs=shape_meta.get("use_images", False),
+        use_image_obs=shape_meta["use_images"],
         use_depth_obs=shape_meta.get("use_depths", False),
     )
     config, _ = config_from_checkpoint(algo_name=ckpt_dict["algo_name"], ckpt_dict=ckpt_dict, verbose=False)
-    env = EnvUtils.wrap_env_from_config(env, config=config) # apply environment wrapper, if applicable
+    env = EnvUtils.wrap_env_from_config(env, config=config) # apply environment warpper, if applicable
     if verbose:
         print("============= Loaded Environment =============")
         print(env)
@@ -523,3 +594,21 @@ def download_url(url, download_dir, check_overwrite=True):
     with DownloadProgressBar(unit='B', unit_scale=True,
                              miniters=1, desc=fname) as t:
         urllib.request.urlretrieve(url, filename=file_to_write, reporthook=t.update_to)
+
+
+def find_and_replace_path_prefix(org_path, replace_prefixes, new_prefix, assert_replace=False):
+    """
+    Try to find and replace one of several prefixes (@replace_prefixes) in string @org_path
+    with another prefix (@new_prefix). If @assert_replace is True, the function asserts that
+    replacement did occur.
+    """
+    check_ind = -1
+    for i, x in enumerate(replace_prefixes):
+        if org_path.startswith(x):
+            check_ind = i
+    if assert_replace:
+        assert check_ind != -1
+    if check_ind == -1:
+        return org_path
+    replace_prefix = replace_prefixes[check_ind]
+    return org_path.replace(replace_prefix, new_prefix, 1)

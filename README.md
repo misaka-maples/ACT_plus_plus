@@ -19,12 +19,17 @@
 - ``visualize_episodes.py`` 从.hdf5数据集中保存视频
 
 ### 软件安装
-
 ```
+#安装git
+apt-get install git
+#克隆项目
+git clone https://github.com/misaka-maples/ACT_plus_plus.git
+
+# 创建并激活 Conda 虚拟环境
 conda create -n aloha python=3.8.10
 conda activate aloha
-pip install torchvision
-pip install torch
+ 
+# 安装依赖项
 pip install pyquaternion
 pip install pyyaml
 pip install rospkg
@@ -36,11 +41,13 @@ pip install matplotlib
 pip install einops
 pip install packaging
 pip install h5py
-pip install 
+pip install ipython 
+pip install diffusers
+pip install torch==2.0.1+cu118 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
 
 ```
 
-- 还需要安装[robomimic](https://github.com/ARISE-Initiative/robomimic/tree/r2d2)（注意r2d2分支），通过 `pip install -e .`
+- 还需要安装[robomimic](https://github.com/ARISE-Initiative/robomimic.git -b diffusion-policy-mg)（diffusion-policy-mg），通过 `pip install -e .`
 - 需要安装detr、mobile_aloha、robomimic，执行：`python setup.py install`
 
 ### 硬件安装

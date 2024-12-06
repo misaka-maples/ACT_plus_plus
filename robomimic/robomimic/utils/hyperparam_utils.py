@@ -16,14 +16,11 @@ class ConfigGenerator(object):
     Useful class to keep track of hyperparameters to sweep, and to generate
     the json configs for each experiment run.
     """
-    def __init__(self, base_config_file, base_exp_name=None, wandb_proj_name=None, script_file=None, generated_config_dir=None):
+    def __init__(self, base_config_file, wandb_proj_name="debug", script_file=None, generated_config_dir=None):
         """
         Args:
             base_config_file (str): path to a base json config to use as a starting point
                 for the parameter sweep.
-
-            base_exp_name (str or None): if provided, override the base experiment name from
-                the one in the base config
 
             script_file (str): script filename to write as output
         """
@@ -39,13 +36,12 @@ class ConfigGenerator(object):
         else:
             self.script_file = script_file
         self.script_file = os.path.expanduser(self.script_file)
-        self.base_exp_name = base_exp_name
         self.parameters = OrderedDict()
 
-        assert (wandb_proj_name is None) or isinstance(wandb_proj_name, str)
+        assert isinstance(wandb_proj_name, str)
         self.wandb_proj_name = wandb_proj_name
 
-    def add_param(self, key, name, group, values, value_names=None):
+    def add_param(self, key, name, group, values, value_names=None, hidename=False):
         """
         Add parameter to the hyperparameter sweep.
 
@@ -72,6 +68,7 @@ class ConfigGenerator(object):
             group=group, 
             values=values, 
             value_names=value_names,
+            hidename=hidename,
         )
 
     def generate(self):
@@ -103,6 +100,9 @@ class ConfigGenerator(object):
         name = base_name
         for k in parameter_values:
             # append parameter name and value to end of base name
+            if len(self.parameters[k].name) == 0 or self.parameters[k].hidename:
+                # empty string indicates that naming should be skipped
+                continue
             if len(self.parameters[k].name) == 0:
                 # empty string indicates that naming should be skipped
                 continue
@@ -215,10 +215,7 @@ class ConfigGenerator(object):
         base_config = load_json(self.base_config_file, verbose=False)
 
         # base exp name from this base config
-        if self.base_exp_name is not None:
-            base_exp_name = self.base_exp_name
-        else:
-            base_exp_name = base_config['experiment']['name']
+        base_exp_name = base_config['experiment']['name']
 
         # use base json to determine the parameter ranges
         parameter_ranges, parameter_names = self._get_parameter_ranges()
@@ -254,8 +251,7 @@ class ConfigGenerator(object):
 
             # populate list of identifying meta for logger;
             # see meta_config method in base_config.py for more info
-            if self.wandb_proj_name is not None:
-                json_dict["experiment"]["logging"]["wandb_proj_name"] = self.wandb_proj_name
+            json_dict["experiment"]["logging"]["wandb_proj_name"] = self.wandb_proj_name
             if "meta" not in json_dict:
                 json_dict["meta"] = dict()
             json_dict["meta"].update(
@@ -293,7 +289,8 @@ class ConfigGenerator(object):
             f.write("#!/bin/bash\n\n")
             for path in json_paths:
                 # write python command to file
-                cmd = "python train.py --config {}\n".format(path)
+                import robomimic
+                cmd = "python {}/scripts/train.py --config {}\n".format(robomimic.__path__[0], path)
                 
                 print()
                 print(cmd)

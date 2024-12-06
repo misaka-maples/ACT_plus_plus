@@ -20,8 +20,12 @@ import robomimic
 import robomimic.utils.tensor_utils as TensorUtils
 import robomimic.utils.log_utils as LogUtils
 import robomimic.utils.file_utils as FileUtils
+import robomimic.utils.obs_utils as ObsUtils
+import robomimic.utils.env_utils as EnvUtils
+import robomimic.macros as Macros
 
-from robomimic.utils.dataset import SequenceDataset
+
+from robomimic.utils.dataset import SequenceDataset, R2D2Dataset, MetaDataset
 from robomimic.envs.env_base import EnvBase
 from robomimic.envs.wrappers import EnvWrapper
 from robomimic.algo import RolloutPolicy
@@ -45,12 +49,17 @@ def get_exp_dir(config, auto_remove_exp_dir=False):
         video_dir (str): path to video directory (sub-folder in experiment directory)
             to store rollout videos
     """
+    assert not (Macros.USE_MAGLEV and Macros.USE_NGC)
+    if Macros.USE_MAGLEV or Macros.USE_NGC:
+        # remove existing experiment directory automatically if path exists so that we don't block on user input
+        auto_remove_exp_dir = True
+
     # timestamp for directory names
     t_now = time.time()
     time_str = datetime.datetime.fromtimestamp(t_now).strftime('%Y%m%d%H%M%S')
 
     # create directory for where to dump model parameters, tensorboard logs, and videos
-    base_output_dir = os.path.expanduser(config.train.output_dir)
+    base_output_dir = os.path.expandvars(os.path.expanduser(config.train.output_dir))
     if not os.path.isabs(base_output_dir):
         # relative paths are specified relative to robomimic module location
         base_output_dir = os.path.join(robomimic.__path__[0], base_output_dir)
@@ -77,7 +86,60 @@ def get_exp_dir(config, auto_remove_exp_dir=False):
     # video directory
     video_dir = os.path.join(base_output_dir, time_str, "videos")
     os.makedirs(video_dir)
+
+    # establish sync path for syncing important training results back
+    set_absolute_sync_path(
+        output_dir=config.train.output_dir,
+        exp_name=config.experiment.name,
+        time_str=time_str,
+    )
+
     return log_dir, output_dir, video_dir
+
+
+def set_absolute_sync_path(output_dir, exp_name, time_str=None):
+    """
+    Establish sync path for syncing important training results back and puts the path
+    into Macros.RESULTS_SYNC_PATH_ABS
+    """
+    need_sync_results = (Macros.USE_MAGLEV and (Macros.MAGLEV_SCRATCH_SYNC_PATH is not None)) or \
+        (Macros.USE_NGC and (Macros.NGC_SCRATCH_SYNC_PATH is not None)) or \
+        ((not Macros.USE_MAGLEV) and (not Macros.USE_NGC) and (Macros.RESULTS_SYNC_PATH is not None))
+    if need_sync_results:
+        # get path where we will sync results
+        assert Macros.RESULTS_SYNC_PATH_ABS is None
+        base_output_dir_name = os.path.basename(os.path.normpath(os.path.expandvars(os.path.expanduser(output_dir))))
+        
+        if Macros.USE_MAGLEV:
+            # turn relative scratch space path into absolute scratch space path
+            sync_prefix = os.path.join(
+                os.getenv("WORKFLOW_SCRATCH"),
+                "test_disk", # NOTE: most workflows mount scratch space under this prefix
+                Macros.MAGLEV_SCRATCH_SYNC_PATH,
+            )
+        elif Macros.USE_NGC:
+            sync_prefix = os.path.expandvars(os.path.expanduser(Macros.NGC_SCRATCH_SYNC_PATH))
+        else:
+            sync_prefix = os.path.expandvars(os.path.expanduser(Macros.RESULTS_SYNC_PATH))
+
+        # store at results_sync_path/output_dir_name/experiment_name/time_str
+        sync_path_without_time_dir = os.path.join(
+            sync_prefix,
+            base_output_dir_name,
+            exp_name,
+        )
+        if os.path.exists(sync_path_without_time_dir):
+            # only keep one time directory per exp name
+            shutil.rmtree(sync_path_without_time_dir)
+        Macros.RESULTS_SYNC_PATH_ABS = sync_path_without_time_dir
+        if time_str is not None:
+            Macros.RESULTS_SYNC_PATH_ABS = os.path.join(sync_path_without_time_dir, time_str)
+        os.makedirs(Macros.RESULTS_SYNC_PATH_ABS)
+    elif (Macros.USE_MAGLEV or Macros.USE_NGC):
+        LogUtils.log_warning(
+            "Using MagLev / NGC, but MAGLEV_SCRATCH_SYNC_PATH / NGC_SCRATCH_SYNC_PATH is unset in macros.py."
+            "No results will be synced back to scratch space."
+        )
 
 
 def load_data_for_training(config, obs_keys):
@@ -150,7 +212,9 @@ def dataset_factory(config, obs_keys, filter_by_attribute=None, dataset_path=Non
     ds_kwargs = dict(
         hdf5_path=dataset_path,
         obs_keys=obs_keys,
+        action_keys=config.train.action_keys,
         dataset_keys=config.train.dataset_keys,
+        action_config=config.train.action_config,
         load_next_obs=config.train.hdf5_load_next_obs, # whether to load next observations (s') from dataset
         frame_stack=config.train.frame_stack,
         seq_length=config.train.seq_length,
@@ -163,9 +227,62 @@ def dataset_factory(config, obs_keys, filter_by_attribute=None, dataset_path=Non
         hdf5_normalize_obs=config.train.hdf5_normalize_obs,
         filter_by_attribute=filter_by_attribute
     )
-    dataset = SequenceDataset(**ds_kwargs)
+
+    ds_kwargs["hdf5_path"] = [ds_cfg["path"] for ds_cfg in config.train.data]
+    ds_kwargs["filter_by_attribute"] = [filter_by_attribute for ds_cfg in config.train.data]
+    ds_weights = [ds_cfg.get("weight", 1.0) for ds_cfg in config.train.data]
+    ds_labels = [ds_cfg.get("label", "dummy") for ds_cfg in config.train.data]
+
+    meta_ds_kwargs = dict()
+
+    dataset = get_dataset(
+        ds_class=R2D2Dataset if config.train.data_format == "r2d2" else SequenceDataset,
+        ds_kwargs=ds_kwargs,
+        ds_weights=ds_weights,
+        ds_labels=ds_labels,
+        normalize_weights_by_ds_size=False,
+        meta_ds_class=MetaDataset,
+        meta_ds_kwargs=meta_ds_kwargs,
+    )
 
     return dataset
+
+
+def get_dataset(
+    ds_class,
+    ds_kwargs,
+    ds_weights,
+    ds_labels,
+    normalize_weights_by_ds_size,
+    meta_ds_class=MetaDataset,
+    meta_ds_kwargs=None,
+):
+    ds_list = []
+    for i in range(len(ds_weights)):
+        
+        ds_kwargs_copy = deepcopy(ds_kwargs)
+
+        keys = ["hdf5_path", "filter_by_attribute"]
+
+        for k in keys:
+            ds_kwargs_copy[k] = ds_kwargs[k][i]
+        
+        ds_list.append(ds_class(**ds_kwargs_copy))
+    
+    if len(ds_weights) == 1:
+        ds = ds_list[0]
+    else:
+        if meta_ds_kwargs is None:
+            meta_ds_kwargs = dict()
+        ds = meta_ds_class(
+            datasets=ds_list,
+            ds_weights=ds_weights,
+            ds_labels=ds_labels,
+            normalize_weights_by_ds_size=normalize_weights_by_ds_size,
+            **meta_ds_kwargs
+        )
+
+    return ds
 
 
 def run_rollout(
@@ -218,6 +335,7 @@ def run_rollout(
 
     total_reward = 0.
     success = { k: False for k in env.is_success() } # success metrics
+    got_exception = False
 
     try:
         for step_i in range(horizon):
@@ -253,10 +371,12 @@ def run_rollout(
 
     except env.rollout_exceptions as e:
         print("WARNING: got rollout exception {}".format(e))
+        got_exception = True
 
     results["Return"] = total_reward
     results["Horizon"] = step_i + 1
     results["Success_Rate"] = float(success["task"])
+    results["Exception_Rate"] = float(got_exception)
 
     # log additional success metrics
     for k in success:
@@ -460,7 +580,7 @@ def should_save_from_rollout_logs(
     )
 
 
-def save_model(model, config, env_meta, shape_meta, ckpt_path, obs_normalization_stats=None):
+def save_model(model, config, env_meta, shape_meta, ckpt_path, obs_normalization_stats=None, action_normalization_stats=None):
     """
     Save model to a torch pth file.
 
@@ -479,6 +599,8 @@ def save_model(model, config, env_meta, shape_meta, ckpt_path, obs_normalization
             normalization. This should map observation keys to dicts
             with a "mean" and "std" of shape (1, ...) where ... is the default
             shape for the observation.
+
+        action_normalization_stats (dict): TODO
     """
     env_meta = deepcopy(env_meta)
     shape_meta = deepcopy(shape_meta)
@@ -493,6 +615,9 @@ def save_model(model, config, env_meta, shape_meta, ckpt_path, obs_normalization
         assert config.train.hdf5_normalize_obs
         obs_normalization_stats = deepcopy(obs_normalization_stats)
         params["obs_normalization_stats"] = TensorUtils.to_list(obs_normalization_stats)
+    if action_normalization_stats is not None:
+        action_normalization_stats = deepcopy(action_normalization_stats)
+        params["action_normalization_stats"] = TensorUtils.to_list(action_normalization_stats)
     torch.save(params, ckpt_path)
     print("save checkpoint to {}".format(ckpt_path))
 
@@ -603,3 +728,72 @@ def is_every_n_steps(interval, current_step, skip_zero=False):
     if skip_zero and current_step == 0:
         return False
     return current_step % interval == 0
+
+
+def get_model_from_output_folder(models_path, videos_path=None, epoch=None, best=False, last=False):
+    """
+    Gets path to model (and video) for a certain epoch number (or the best or last epoch).
+
+    Args:
+        models_path (str): path to models folder (in output directory)
+        videos_path (str): path to videos folder (in output directory)
+        epoch (int): if provided, get model ckpt and video for this epoch
+        best (bool): if True, get the model and video for the best checkpoint (according to success rate)
+        last (bool): if True, get the model and video for the last checkpoint (according to epoch number)
+
+    Returns:
+        model_path (str): path to model pth
+        video_path (str): path to mp4
+        epoch (int): epoch number for retrieved model and video paths
+    """
+
+    # make sure we either grab a specific epoch, best epoch, or last epoch
+    assert sum([(epoch is not None), best, last]) == 1
+
+    # run through models to find the epoch we want
+    best_success_rate = -0.1
+    need_particular_epoch = (epoch is not None)
+    need_best_epoch = best
+    need_max_epoch = last
+
+    selected_epoch = -1
+    selected_model_path = None
+    for f in os.scandir(models_path):
+        model_epoch = int(f.name.split("_")[2].strip(".pth"))
+
+        if need_particular_epoch and (model_epoch == epoch):
+            selected_epoch = epoch
+            selected_model_path = os.path.join(models_path, f.name)
+
+        elif need_best_epoch: 
+            # this block assumes that the experiment run opted to save the model with the best checkpoint
+            if "success" in f.name:
+                # example name: model_epoch_250_NutAssemblySquareTarget_6_success_0.86.pth
+                # take last piece - "0.86.pth" -> "0.86" -> convert to float
+                success_rate = float(f.name.split("success_")[-1][:-4])
+                if success_rate > best_success_rate:
+                    best_success_rate = success_rate
+                    selected_epoch = model_epoch
+                    selected_model_path = os.path.join(models_path, f.name)
+
+        elif need_max_epoch:
+            # find last epoch
+            if model_epoch > selected_epoch:
+                selected_epoch = model_epoch
+                selected_model_path = os.path.join(models_path, f.name)
+
+    assert selected_epoch != -1
+    assert selected_model_path is not None
+
+    selected_video_path = None
+    if videos_path is not None:
+        # get random video filename
+        video_fname = None
+        for f in os.scandir(videos_path):
+            video_fname = f.name
+            break
+        # example video file name: NutAssemblySquareTarget_6_epoch_150.mp4
+        # take name skeleton and use it to infer name of source videos we want, then copy them
+        video_name_prefix = video_fname.split("epoch")[0]
+        selected_video_path = os.path.join(videos_path, "{}epoch_{}.mp4".format(video_name_prefix, selected_epoch))
+    return selected_model_path, selected_video_path, selected_epoch

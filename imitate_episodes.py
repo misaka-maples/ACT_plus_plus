@@ -13,7 +13,8 @@ def get_env_():
     dirs_to_add = [
         parent_dir,  # 项目根目录
         os.path.join(parent_dir, 'detr'),  # 上一级的
-        os.path.join(parent_dir, 'robomimic')
+        os.path.join(parent_dir, 'robomimic'),
+        os.path.join(parent_dir, 'robomimic', 'robomimic')
     ]
 
     # 动态添加目录到 sys.path

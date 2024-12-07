@@ -16,6 +16,7 @@ setup(
         package for package in find_packages() if package.startswith("robomimic")
     ],
     install_requires=[
+        "cmake",
         "numpy>=1.13.3",
         "h5py",
         "psutil",

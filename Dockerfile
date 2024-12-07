@@ -2,12 +2,10 @@ FROM python:3.10.12
 LABEL authors="maples"
 WORKDIR /ACT_plus_plus
 COPY . /ACT_plus_plus
-# 更新软件包并安装 Git
-RUN apt-get update && apt-get install -y git
 
 # 安装 Git 和其他必要的依赖
 RUN apt-get update && \
-    apt-get install -y git && \
+    apt-get install -y git vim tmux libgl1-mesa-glx sudo && \
     apt-get clean
 # 设置 pip 源
 RUN echo "[global]\nindex-url = https://pypi.tuna.tsinghua.edu.cn/simple" > /etc/pip.conf
@@ -19,5 +17,6 @@ RUN echo "[global]\nindex-url = https://pypi.tuna.tsinghua.edu.cn/simple" > /etc
 RUN pip install --upgrade pip
 #    && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN pip install -r requirements.txt
+CMD ["/bin/bash"]
 
 

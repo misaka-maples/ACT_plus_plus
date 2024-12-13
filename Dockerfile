@@ -17,6 +17,9 @@ RUN echo "[global]\nindex-url = https://pypi.tuna.tsinghua.edu.cn/simple" > /etc
 RUN pip install --upgrade pip
 #    && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN pip install -r requirements.txt
+RUN pip install .
+RUN cd ./robomimic
+RUN pip install .
 CMD ["/bin/bash"]
 
 

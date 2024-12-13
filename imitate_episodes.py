@@ -57,12 +57,10 @@ os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
 #     monitor_memory=False,     # 禁用内存监控（如果适用）
 #     monitor_system=False      # 禁用系统监控（综合）
 # )
-
 wandb.init(
     project='act++',
     name='loss_log',
     # settings=settings
-
 )
 #63d8db0b669a1b1c712284f186093c19c278719c
 def get_auto_index(dataset_dir):

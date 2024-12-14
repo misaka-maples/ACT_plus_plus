@@ -448,7 +448,7 @@ if __name__ == '__main__':
     # modify_hdf5(DATA_DIR + '\\reshape_hdf5\\episode_0.hdf5', compress=True)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
-    # save_video('D:\\aloha\ACT_plus_plus\hdf5_file\\reshape_hdf5', fps=2, i=0)
+    save_video('D:\\aloha\qpos_7_image_2\ACT_plus_plus\hdf5_file\\temo', fps=2, i=0)
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
@@ -473,17 +473,17 @@ if __name__ == '__main__':
     # print(image_paths)
     # batch_save_hdf5()
 
-    _, _, qpos, actions = get_state(DATA_DIR + "\\reshape_hdf5_qpos_2\\episode_0.hdf5")
-    # 假设 actions 是一个二维列表或数组
-    actions = [i - 2 for i in actions]
-
-    # 打印修改前的第三列数据
-    # print(len([i[2] for i in actions]))
-
-    # 对每个数据的第三位取反
-    actions = [[*i[:2], -i[2], *i[3:]] for i in actions]
-
-    # 打印修改后的第三列数据
-    # print([i[2] for i in actions])
-    # 将数据传入 visualize 函数
-    visualize_episodes.visualize_joints(qpos, actions, DATA_DIR + '\\temp_-.png',)
+    # _, _, qpos, actions = get_state(DATA_DIR + "\\reshape_hdf5_qpos_2\\episode_0.hdf5")
+    # # 假设 actions 是一个二维列表或数组
+    # actions = [i - 2 for i in actions]
+    #
+    # # 打印修改前的第三列数据
+    # # print(len([i[2] for i in actions]))
+    #
+    # # 对每个数据的第三位取反
+    # actions = [[*i[:2], -i[2], *i[3:]] for i in actions]
+    #
+    # # 打印修改后的第三列数据
+    # # print([i[2] for i in actions])
+    # # 将数据传入 visualize 函数
+    # visualize_episodes.visualize_joints(qpos, actions, DATA_DIR + '\\temp_-.png',)

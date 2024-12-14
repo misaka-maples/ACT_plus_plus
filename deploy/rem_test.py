@@ -105,7 +105,6 @@ if __name__ == "__main__":
         'vq_class': None,
         'vq_dim': None,
         'no_encoder': False,
-        'num_queries': 100,
     }
     ActionGenerator= ActionGenerator(config)
     for i in range(2000):

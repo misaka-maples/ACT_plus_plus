@@ -11,7 +11,7 @@ import numpy as np
 from pyorbbecsdk import *
 from utils import frame_to_bgr_image
 from pynput.keyboard import Listener, Key
-
+from policy_test import ActionGenerator
 frames_queue_lock = Lock()
 
 # Configuration settings
@@ -174,49 +174,49 @@ def stop_streams(pipelines: List[Pipeline]):
         index += 1
 
 
-def save_hdf5(max_timesteps, joints_nums, episode_idx, data_dict, reshape_hdf5_path):
-    os.makedirs(reshape_hdf5_path, exist_ok=True)
-    dataset_path = os.path.join(reshape_hdf5_path, f'episode_{episode_idx}.hdf5')
-
-    with h5py.File(dataset_path, 'w') as root:
-        root.attrs['sim'] = True
-        obs = root.create_group('observations')
-        images_group = obs.create_group('images')
-
-        # 创建每个相机的数据集并写入数据
-        for cam_name in ['images/top', 'images/right_wrist']:  # 确保只处理相关键
-            if f'/observations/{cam_name}' in data_dict:
-                images_group.create_dataset(
-                    cam_name.split('/')[-1],  # 使用相机名称作为数据集名称
-                    data=np.array(data_dict[f'/observations/{cam_name}']),
-                    dtype='uint8',
-                    # compression='gzip',
-                    # compression_opts=4
-                )
-
-        # 写入 qpos 数据
-        if '/observations/qpos' in data_dict:
-            if 'qpos' in obs:
-                print("Dataset 'qpos' already exists. Updating it.")
-                del obs['qpos']
-            obs.create_dataset(
-                'qpos',
-                data=np.array(data_dict['/observations/qpos']),
-                dtype='float32'
-            )
-
-        # 写入 action 数据
-        if '/action' in data_dict:
-            if 'action' in root:
-                print("Dataset 'action' already exists. Updating it.")
-                del root['action']
-            root.create_dataset(
-                'action',
-                data=np.array(data_dict['/action']),
-                dtype='float32'
-            )
-
-    print(f"Data saved to {dataset_path}")
+# def save_hdf5(max_timesteps, joints_nums, episode_idx, data_dict, reshape_hdf5_path):
+#     os.makedirs(reshape_hdf5_path, exist_ok=True)
+#     dataset_path = os.path.join(reshape_hdf5_path, f'episode_{episode_idx}.hdf5')
+#
+#     with h5py.File(dataset_path, 'w') as root:
+#         root.attrs['sim'] = True
+#         obs = root.create_group('observations')
+#         images_group = obs.create_group('images')
+#
+#         # 创建每个相机的数据集并写入数据
+#         for cam_name in ['images/top', 'images/right_wrist']:  # 确保只处理相关键
+#             if f'/observations/{cam_name}' in data_dict:
+#                 images_group.create_dataset(
+#                     cam_name.split('/')[-1],  # 使用相机名称作为数据集名称
+#                     data=np.array(data_dict[f'/observations/{cam_name}']),
+#                     dtype='uint8',
+#                     # compression='gzip',
+#                     # compression_opts=4
+#                 )
+#
+#         # 写入 qpos 数据
+#         if '/observations/qpos' in data_dict:
+#             if 'qpos' in obs:
+#                 print("Dataset 'qpos' already exists. Updating it.")
+#                 del obs['qpos']
+#             obs.create_dataset(
+#                 'qpos',
+#                 data=np.array(data_dict['/observations/qpos']),
+#                 dtype='float32'
+#             )
+#
+#         # 写入 action 数据
+#         if '/action' in data_dict:
+#             if 'action' in root:
+#                 print("Dataset 'action' already exists. Updating it.")
+#                 del root['action']
+#             root.create_dataset(
+#                 'action',
+#                 data=np.array(data_dict['/action']),
+#                 dtype='float32'
+#             )
+#
+#     print(f"Data saved to {dataset_path}")
 
 def get_image_paths(directory, prefix, extension):
     """
@@ -253,31 +253,31 @@ def on_new_frame_callback(frames: FrameSet, index: int):
         frames_queue[index].put(frames)
 
 
-def save_images_from_dict(data_dict, output_dir):
-    """
-    保存字典中的图像到指定文件夹。
-
-    参数：
-        data_dict (dict): 包含图像数据的字典，键为相机路径，值为图像列表。
-        output_dir (str): 保存图像的根目录。
-    """
-    os.makedirs(output_dir, exist_ok=True)  # 确保输出目录存在
-
-    # 遍历图像键
-    for key in ['/observations/images/top', '/observations/images/right_wrist']:
-        if key not in data_dict:
-            print(f"Key {key} not found in data_dict.")
-            continue
-
-        cam_name = key.split('/')[-1]  # 提取相机名称
-        cam_dir = os.path.join(output_dir, cam_name)  # 创建相机子目录
-        os.makedirs(cam_dir, exist_ok=True)
-
-        for i, image in enumerate(data_dict[key]):
-            filename = os.path.join(cam_dir, f"color_image_{cam_name}_{i}.png")
-            resized_image = cv2.resize(image, (640, 480))  # 调整到 640x480
-            cv2.imwrite(filename, resized_image)
-            print(f"Saved: {filename}")
+# def save_images_from_dict(data_dict, output_dir):
+#     """
+#     保存字典中的图像到指定文件夹。
+#
+#     参数：
+#         data_dict (dict): 包含图像数据的字典，键为相机路径，值为图像列表。
+#         output_dir (str): 保存图像的根目录。
+#     """
+#     os.makedirs(output_dir, exist_ok=True)  # 确保输出目录存在
+#
+#     # 遍历图像键
+#     for key in ['/observations/images/top', '/observations/images/right_wrist']:
+#         if key not in data_dict:
+#             print(f"Key {key} not found in data_dict.")
+#             continue
+#
+#         cam_name = key.split('/')[-1]  # 提取相机名称
+#         cam_dir = os.path.join(output_dir, cam_name)  # 创建相机子目录
+#         os.makedirs(cam_dir, exist_ok=True)
+#
+#         for i, image in enumerate(data_dict[key]):
+#             filename = os.path.join(cam_dir, f"color_image_{cam_name}_{i}.png")
+#             resized_image = cv2.resize(image, (640, 480))  # 调整到 640x480
+#             cv2.imwrite(filename, resized_image)
+#             print(f"Saved: {filename}")
 def main():
     global curr_device_cnt, max_timesteps, qpos_list, images_dict, QposRecorder
     read_config(config_file_path)
@@ -316,23 +316,61 @@ def main():
         config.enable_stream(depth_profile)
         pipelines.append(pipeline)
         configs.append(config)
-        max_timesteps = 300
-        qpos_list = []
-        images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
-        save_image_dir = os.path.join(os.getcwd(), "color_images")
-        if not os.path.exists(save_image_dir):
-            os.mkdir(save_image_dir)
-        save_image_dir = os.path.join(os.getcwd(), "color_images_")
-        if not os.path.exists(save_image_dir):
-            os.mkdir(save_image_dir)
+        #可以放外面吗？
+        # max_timesteps = 300
+        # qpos_list = []
+        # images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
+        # save_image_dir = os.path.join(os.getcwd(), "color_images")
+        # if not os.path.exists(save_image_dir):
+        #     os.mkdir(save_image_dir)
+        # save_image_dir = os.path.join(os.getcwd(), "color_images_")
+        # if not os.path.exists(save_image_dir):
+        #     os.mkdir(save_image_dir)
     start_streams(pipelines, configs)
-    # threading.Event().wait(0.1)
-
+    max_timesteps = 300
+    qpos_list = []
+    images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
+    save_image_dir = os.path.join(os.getcwd(), "color_images")
+    if not os.path.exists(save_image_dir):
+        os.mkdir(save_image_dir)
+    save_image_dir = os.path.join(os.getcwd(), "color_images_")
+    if not os.path.exists(save_image_dir):
+        os.mkdir(save_image_dir)
+    image = process_frames(pipelines)
+    images_dict1 = {cam_name: [] for cam_name in camera_names}
+    images_dict1['right_wrist'].append(cv2.resize(image[0], (640, 480)))
+    images_dict1['top'].append(cv2.resize(image[1], (640, 480)))
+    angle_qpos = posRecorder.get_state()
+    radius_qpos = [math.radians(j) for j in angle_qpos]
+    radius_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
+    qpos_list = radius_qpos
+    actions_list = []
+    qpos_list_ = []
+    config = {
+        'image_dict': images_dict1,
+        'qpos_list': qpos_list,
+        'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
+        'task_name': 'sim_transfer_cube_scripted',
+        'ckpt_dir': '/home/zhnh/Documents/xzx_projects/aloha_deploy/act-plus-plus/results',
+        'policy_class': 'ACT',
+        'kl_weight': 10,
+        'chunk_size': 30,
+        'hidden_dim': 512,
+        'batch_size': 8,
+        'dim_feedforward': 3200,
+        'num_steps': 2000,
+        'lr': 1e-5,
+        'seed': 0,
+        'use_vq': False,
+        'vq_class': None,
+        'vq_dim': None,
+        'no_encoder': False,
+    }
+    ActionGenerator1= ActionGenerator(config)
     global stop_processing
     try:
         # now = time.time()
         for i in range(max_timesteps):
-            now = time.time()
             # 创建并启动监听器
             print(f"episode{i}\n"
                   f"--------------------------------------------------------------------------------------")
@@ -345,9 +383,9 @@ def main():
             radius_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
             print(radius_qpos[6])
             qpos_list.append(radius_qpos)
-            images_dict['right_wrist'].append(cv2.resize(image[0], (640, 480)))
-            images_dict['top'].append(cv2.resize(image[1], (640, 480)))
-            filename_ = os.path.join(os.getcwd(), "color_images_", f"color_image_top_{i}.png")
+            images_dict['right_wrist']=(cv2.resize(image[0], (640, 480)))
+            images_dict['top']=(cv2.resize(image[1], (640, 480)))
+            #filename_ = os.path.join(os.getcwd(), "color_images_", f"color_image_top_{i}.png")
             # cv2.imwrite(filename_,cv2.resize(image[0], (640, 480)))
             # print(f"7 joint :{posRecorder.get_state()[-1]}")
             # print(angle_qpos[1])
@@ -356,9 +394,22 @@ def main():
             #     posRecorder.real_right_arm.rm_set_tool_voltage(0)
             # else:
             #     posRecorder.real_right_arm.rm_set_tool_voltage(3)
-        # next_episode = time.time()
-        # print(f"1 episode time : {next_episode - now}")
-
+            ActionGenerator.image_dict = images_dict
+            ActionGenerator.qpos_list = radius_qpos
+            actions = ActionGenerator.get_action()
+            actions = [i - 2 for i in actions]
+            actions[2] = -actions[2]
+            print(f":-----------------------------actions------------------------------------:\n{actions}")
+            qpos_list_.append(ActionGenerator.qpos_list)
+            actions_list.append(actions)
+            power = actions[6]
+            actions = [math.degrees(i) for i in actions[:6]]
+            posRecorder.real_right_arm.Movej_Cmd(actions, 10, 0, 0, True)
+            if power > 2:
+                posRecorder.real_right_arm.rm_set_tool_voltage(3)
+            else:
+                posRecorder.real_right_arm.rm_set_tool_voltage(0)
+            # print(len(qpos_list),len(actions_list))
     except KeyboardInterrupt:
         print("Interrupted by user")
         stop_processing = True
@@ -379,19 +430,7 @@ def main():
         # 添加图像数据到字典
         for cam_name in camera_names:
             data_dict[f'/observations/images/{cam_name}'] = images_dict[cam_name]
-        # for i in len(data_dict['/observations/images/top']):
-        #     filename_ = os.path.join(os.getcwd(), "color_images_", f"color_image_top_{i}.png")
-        #     cv2.imwrite(filename_, cv2.resize(image[0], (640, 480)))
-        # save_images_from_dict(data_dict, 'color_image_')
-        # 保存到 HDF5 文件
-        # print(data_dict['/observations/qpos'])
-        save_hdf5(
-            max_timesteps=max_timesteps,
-            joints_nums=7,
-            episode_idx=49,
-            data_dict=data_dict,
-            reshape_hdf5_path='/home/zhnh/Documents/xzx_projects/GraspNet_Pointnet2_PyTorch1.13.1'
-        )
+
         # 确保监听器线程被正确关闭
         # listener_thread.join()
         print("===============Stopping pipelines====")

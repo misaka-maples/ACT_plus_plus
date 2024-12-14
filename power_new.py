@@ -24,8 +24,6 @@ def power_off_magnet():
     """
     QposRecorder.real_right_arm.rm_set_tool_voltage(0)  # 下电
     print("电磁铁已下电")
-
-
 # def control_magnet():
 #     """
 #     持续运行的循环，依据按钮状态控制电磁铁。

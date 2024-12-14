@@ -251,6 +251,7 @@ class ACTPolicy(nn.Module):
             loss_dict['l1'] = l1
             loss_dict['kl'] = total_kld[0]
             loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
+
             # 计算动作幅度奖励
             action_amplitude_reward = torch.mean(torch.abs(a_hat))
             loss_dict['amplitude_reward'] = -self.amplitude_weight * action_amplitude_reward

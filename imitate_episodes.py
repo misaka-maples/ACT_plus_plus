@@ -75,6 +75,8 @@ def main(args):
     # set_seed(1)
     # command line parameters
     task_name = args['task_name']
+    if task_name is None:
+        raise "No task name specified"
     is_sim = task_name[:4] == 'sim_'
     if is_sim or task_name == 'all':
         from constants import SIM_TASK_CONFIGS

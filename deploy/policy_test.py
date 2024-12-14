@@ -66,14 +66,6 @@ class ActionGenerator:
             'temporal_agg': False,
             'state_dim': 7,
         }
-        if args['qpos_list'] is None:
-            raise "qpos_list in policy test is None"
-        else:
-            self.qpos_list = args['qpos_list']
-        if args['image_dict'] is None:
-            raise "image_list in policy test is None"
-        else:
-            self.image_dict = args['image_dict']
         # 载入策略模型
         self.ckpt_dir = args['ckpt_dir']
         self.policy_class = args['policy_class']
@@ -143,11 +135,6 @@ class ActionGenerator:
         if self.policy_class == "ACT":
             all_actions = self.policy(qpos, curr_image)
             raw_action = all_actions[:, 0]  # 单步数据不涉及时间步索引
-        elif self.policy_class == "Diffusion":
-            all_actions = self.policy(qpos, curr_image)
-            raw_action = all_actions[:, 0]
-        elif self.policy_class == "CNNMLP":
-            raw_action = self.policy(qpos, curr_image)
         else:
             raise NotImplementedError
 
@@ -173,12 +160,12 @@ class ActionGenerator:
         - action: 当前时间步生成的动作向量。
         """
         # print(self.qpos_list)
-        qpos_list=self.qpos_list
-        image_dict=self.image_dict
+        # qpos_list=self.qpos_list
+        # image_dict=self.image_dict
         start_time = time.time()
         # print(start_time)
         # 调用评估函数生成动作
-        action = self._eval_bc_with_external_inputs(qpos_list, image_dict)
+        action = self._eval_bc_with_external_inputs(self.qpos_list, self.image_dict)
 
         end_time = time.time()
         # print(f"calculate time: {end_time - start_time}")#===================================================

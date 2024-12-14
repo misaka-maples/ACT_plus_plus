@@ -8,6 +8,7 @@ import cv2
 from time import time
 from torch.utils.data import TensorDataset, DataLoader
 import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
 
 import IPython
 
@@ -20,7 +21,45 @@ import numpy as np
 
 from pyorbbecsdk import FormatConvertFilter, VideoFrame
 from pyorbbecsdk import OBFormat, OBConvertFormat
+# 定义关节和状态名称
+JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
+STATE_NAMES = JOINT_NAMES + ["gripper"]
+def visualize_joints(qpos_list, command_list, plot_path=None, ylim=None, label_overwrite=None):
+    if label_overwrite:
+        label1, label2 = label_overwrite
+    else:
+        label1, label2 = 'State', 'Command'
 
+    qpos = np.array(qpos_list)  # 转为 NumPy 数组
+    command = np.array(command_list)
+    num_ts, num_dim = qpos.shape  # 时间步和维度数
+    h, w = 2, num_dim
+    num_figs = num_dim
+    fig, axs = plt.subplots(num_figs, 1, figsize=(w, h * num_figs))
+
+    # 绘制关节状态
+    all_names = [name + '_left' for name in STATE_NAMES] + [name + '_right' for name in STATE_NAMES]
+    for dim_idx in range(num_dim):
+        ax = axs[dim_idx]
+        ax.plot(qpos[:, dim_idx], label=label1)
+        ax.set_title(f'Joint {dim_idx}: {all_names[dim_idx]}')
+        ax.legend()
+
+    # 绘制动作指令
+    for dim_idx in range(num_dim):
+        ax = axs[dim_idx]
+        ax.plot(command[:, dim_idx], label=label2)
+        ax.legend()
+
+    if ylim:
+        for dim_idx in range(num_dim):
+            ax = axs[dim_idx]
+            ax.set_ylim(ylim)
+
+    plt.tight_layout()
+    plt.savefig(plot_path)
+    print(f'Saved qpos plot to: {plot_path}')
+    plt.close()
 
 def yuyv_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
     yuyv = frame.reshape((height, width, 2))

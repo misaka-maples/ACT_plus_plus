@@ -176,7 +176,7 @@ def main():
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': '/home/zhnh/Documents/xzx_projects/aloha_deploy/act-plus-plus/results',
+        'ckpt_dir': '/home/zhnh/Documents/project/act_arm_project/models/demo2',
         'policy_class': 'ACT',
         'kl_weight': 10,
         'chunk_size': 300,
@@ -211,27 +211,35 @@ def main():
             cv2.imwrite(os.path.join(save_image_dir,f"right{i}.png"), np.array(images_dict['right_wrist']))
             ActionGenerator1.image_dict = images_dict
             ActionGenerator1.qpos_list = radius_qpos
-            actions = ActionGenerator1.get_action()
-            actions = [i - 2 for i in actions]
-            actions[2] = -actions[2]
+            # cv2.imshow("top" ,image[0])
+            # # cv2.imshow("Device {}".format(i), image)
+            # key = cv2.waitKey(1)
+            # if key == ord('q') or key == ESC_KEY:
+            #     return
+            now = time.time()
 
+            actions = ActionGenerator1.get_action()
+            # actions = [i - 2 for i in actions]
+                # actions[2] = -actions[2]
+            step_caculate = time.time()
             qpos_list_.append(ActionGenerator1.qpos_list)
             actions_list.append(actions)
             power = actions[6]
+            print(power,step_caculate-now)
             actions = [math.degrees(i) for i in actions[:6]]
             print(f":---------------------------------------actions--------------------"
                   f"--------------------------:\n{actions}")
             # posRecorder.real_right_arm.rm_movej(actions, 20, 0, 0, 1)
-            # angle_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
+            angle_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
             # print(angle_qpos[:6], actions)
-            #
-            # result_action = interpolate_with_step_limit(angle_qpos[6:], actions)
+
+            result_action = interpolate_with_step_limit(angle_qpos[:6], actions, 2)
             # print(f"result-action:{result_action}")
-            # for i in result_action:
-            #     print(f"i:", i)
-            #     posRecorder.real_right_arm.rm_movej_canfd(i,False)
-            #     time.sleep(1)
-            if power > 2:
+            for i in result_action:
+                print(f"i:", i)
+                posRecorder.real_right_arm.rm_movej_canfd(i,False)
+                time.sleep(0.03)
+            if power > 3:
                 posRecorder.real_right_arm.rm_set_tool_voltage(3)
             else:
                 posRecorder.real_right_arm.rm_set_tool_voltage(0)
@@ -244,8 +252,6 @@ def main():
         path_save_image = os.path.join("/home/zhnh/Documents/project/act_arm_project/deploy",
                                            "deploy_image", current_time.strftime("%m-%d %H:%M") + ".png")
         visualize_joints(qpos_list_, actions_list, path_save_image)
-
-
         stop_streams(pipelines)
 def interpolate_with_step_limit(array1, array2, step=10):
     result = []

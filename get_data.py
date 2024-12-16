@@ -89,7 +89,7 @@ def process_frames(pipelines):
             # print(len(images))
             # 检查当前设备是否还有帧未处理
             # if frames_queue[device_index].empty() and len(images)==2:
-            if  len(images) == 2:
+            if  len(images) == curr_device_cnt:
                 all_frames_processed = True  # 如果队列为空，设置标志为True
                 # print(f"quit_process_frames")
         # 打印处理帧所花费的时间
@@ -258,6 +258,12 @@ def main():
     read_config(config_file_path)
     ctx = Context()
     device_list = ctx.query_devices()
+    # device_info = device_list[0].get_device_info()
+    # device_name = device_info.get_name()
+    # device_pid = device_info.get_pid()
+    # serial_number = device_info.get_serial_number()
+
+    # print(f"device :-----------------------", device_name)
     if device_list.get_count() == 0:
         print("No device connected")
         return
@@ -291,12 +297,12 @@ def main():
         config.enable_stream(depth_profile)
         pipelines.append(pipeline)
         configs.append(config)
-    max_timesteps = 300
+    max_timesteps = 400
     qpos_list = []
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
-    # save_image_dir = os.path.join(os.getcwd(), "color_images")
-    # if not os.path.exists(save_image_dir):
-    #     os.mkdir(save_image_dir)
+    save_image_dir = os.path.join(os.getcwd(), "color_images")
+    if not os.path.exists(save_image_dir):
+        os.mkdir(save_image_dir)
     # save_image_dir = os.path.join(os.getcwd(), "color_images_")
     # if not os.path.exists(save_image_dir):
     #     os.mkdir(save_image_dir)
@@ -309,8 +315,9 @@ def main():
         for i in range(max_timesteps):
             now = time.time()
             # 创建并启动监听器
-            print(f"episode{i}\n"
-                  f"--------------------------------------------------------------------------------------")
+            print(f"\n"
+                  f"-------------------------------------episode{i}-------------------------------------------------"
+                  f"\n")
             image = process_frames(pipelines)
             # if image == []:
             #     image = process_frames(pipelines)
@@ -320,10 +327,20 @@ def main():
             radius_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
             print(radius_qpos[6])
             qpos_list.append(radius_qpos)
-            images_dict['top'].append(cv2.resize(image[0], (640, 480)))
-            images_dict['right_wrist'].append(cv2.resize(image[1], (640, 480)))
-            # filename_ = os.path.join(os.getcwd(), "color_images_", f"color_image_top_{i}.png")
-            # cv2.imwrite(filename_,cv2.resize(image[0], (640, 480)))
+            if curr_device_cnt==1:
+                images_dict['top'].append(cv2.resize(image[0], (640, 480)))
+            elif curr_device_cnt == 2:
+                images_dict['top'].append(cv2.resize(image[0], (640, 480)))
+                images_dict['right_wrist'].append(cv2.resize(image[1], (640, 480)))
+            else:
+                raise "device error"
+            for name in camera_names:
+                filename_ = os.path.join(os.getcwd(), "color_images", f"color_image_{name}_{i}.png")
+                if name =='top':
+                    cv2.imwrite(filename_,cv2.resize(image[0], (640, 480)))
+                if name == 'right_wrist' and curr_device_cnt == 2:
+                    cv2.imwrite(filename_,cv2.resize(image[1], (640, 480)))
+
             # print(f"7 joint :{posRecorder.get_state()[-1]}")
             # print(angle_qpos[1])
             # if angle_qpos[1]>60:
@@ -363,7 +380,7 @@ def main():
         save_hdf5(
             max_timesteps=max_timesteps,
             joints_nums=7,
-            episode_idx=0,
+            episode_idx=11,
             data_dict=data_dict,
             reshape_hdf5_path='/home/zhnh/Documents/project/act_arm_project/save_dir'
         )

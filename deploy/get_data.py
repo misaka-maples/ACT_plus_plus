@@ -53,7 +53,8 @@ key_state = False  # 按键状态：True 表示按下，False 表示松开
 # 按下按键时的回调
 def on_press(key):
     global key_state
-    if not key_state:  # 避免重复触发
+
+    if not key_state and key.char=='w':  # 避免重复触发
         # print("按键被按下，开始执行任务...")
         posRecorder.real_right_arm.rm_set_tool_voltage(3)
         key_state = True
@@ -62,7 +63,7 @@ def on_press(key):
 def on_release(key):
     global key_state
     if key_state:  # 避免重复触发
-        print("按键已松开，重置状态...")
+        # print("\n\r\033[10G按键已松开，重置状态...", end="", flush=True)
         posRecorder.real_right_arm.rm_set_tool_voltage(0)
         key_state = False
 
@@ -71,7 +72,26 @@ def on_release(key):
         # print("退出程序...")
         return False
 
+def wait_for_key(target_key):
+    """
+    等待用户按下指定按键。
+    :param target_key: 要监听的目标按键（字符，如 's' 或特殊键 keyboard.Key.esc）
+    """
+    print(f"等待按下 '{target_key}' 键...")
 
+    def on_press(key):
+        try:
+            if hasattr(key, 'char') and key.char == target_key:  # 字符按键
+                print(f"检测到 '{target_key}' 键，继续程序...")
+                return False  # 停止监听
+            elif key == target_key:  # 特殊按键
+                print(f"检测到特殊按键 '{target_key}'，继续程序...")
+                return False
+        except AttributeError:
+            pass  # 忽略其他按键
+
+    with keyboard.Listener(on_press=on_press) as listener:
+        listener.join()  # 阻塞程序直到监听器结束
 # 在后台启动键盘监听线程
 listener = keyboard.Listener(on_press=on_press, on_release=on_release)
 listener.start()
@@ -343,13 +363,20 @@ def main():
     # threading.Event().wait(0.1)
     pre_time = time.time()
     # button()
+    get_image_number = 0
     global stop_processing
     try:
-        # now = time.time()
+        now = time.time()
         print(pre_time-start_time)
+        for i in range(30):
+            image = process_frames(pipelines)
+        drop_time  = time.time()
+        print(drop_time-now)
+        wait_for_key('s')
         for i in tqdm(range(max_timesteps)):
             now = time.time()
 
+                # 在这里执行你的保存代码
             # 创建并启动监听器
             # print(f"\n"
             #       f"-------------------------------------episode{i}-------------------------------------------------"
@@ -372,10 +399,12 @@ def main():
                 raise "device error"
             for name in camera_names:
                 filename_ = os.path.join(os.getcwd(), "color_images", f"color_image_{name}_{i}.png")
-                if name =='top':
+                if name =='top' and get_image_number <=0:
+                    # print(get_image_number)
                     cv2.imwrite(filename_,cv2.resize(image[0], (640, 480)))
-                if name == 'right_wrist' and curr_device_cnt == 2:
+                if name == 'right_wrist' and curr_device_cnt == 2 and get_image_number <=0:
                     cv2.imwrite(filename_,cv2.resize(image[1], (640, 480)))
+                    get_image_number += 1
 
             # print(f"7 joint :{posRecorder.get_state()[-1]}")
             # print(angle_qpos[1])

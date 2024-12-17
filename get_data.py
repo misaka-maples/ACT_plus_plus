@@ -360,7 +360,8 @@ def main():
             images_dict[cam_name] = np.array(images_dict[cam_name])
 
         # 创建动作列表
-        action_list = np.vstack([qpos_list[0], qpos_list])
+        action_list = qpos_list
+        qpos_list = np.vstack([qpos_list[0], qpos_list])
 
         # 构建数据字典
         data_dict = {

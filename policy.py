@@ -203,9 +203,10 @@ class ACTPolicy(nn.Module):
         model, optimizer = build_ACT_model_and_optimizer(args_override)  # 调用辅助函数构建模型和优化器
         self.model = model  # CVAE 解码器部分
         self.optimizer = optimizer  # 优化器
-        self.kl_weight = args_override['kl_weight']  # KL 散度权重
-        self.vq = args_override['vq']  # 是否启用 VQ（Vector Quantization）
-        self.amplitude_weight = 0.1
+        if args_override['eval'] == False:
+            self.kl_weight = args_override['kl_weight']  # KL 散度权重
+            self.vq = args_override['vq']  # 是否启用 VQ（Vector Quantization）
+            self.amplitude_weight = 0.1
         # print(f'KL Weight {self.kl_weight}')
 
     def __call__(self, qpos, image, actions=None, is_pad=None, vq_sample=None):

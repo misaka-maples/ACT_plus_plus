@@ -12,6 +12,7 @@ from tqdm import tqdm
 from pyorbbecsdk import *
 from utils import frame_to_bgr_image
 # from pynput.keyboard import Listener, Key
+from pynput import keyboard
 
 frames_queue_lock = Lock()
 
@@ -47,6 +48,33 @@ class QposRecorder:
         return return_action
 posRecorder = QposRecorder()
 
+key_state = False  # 按键状态：True 表示按下，False 表示松开
+
+# 按下按键时的回调
+def on_press(key):
+    global key_state
+    if not key_state:  # 避免重复触发
+        # print("按键被按下，开始执行任务...")
+        posRecorder.real_right_arm.rm_set_tool_voltage(3)
+        key_state = True
+
+# 松开按键时的回调
+def on_release(key):
+    global key_state
+    if key_state:  # 避免重复触发
+        print("按键已松开，重置状态...")
+        posRecorder.real_right_arm.rm_set_tool_voltage(0)
+        key_state = False
+
+    # 如果按下 ESC 键，退出监听
+    if key == keyboard.Key.esc:
+        # print("退出程序...")
+        return False
+
+
+# 在后台启动键盘监听线程
+listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+listener.start()
 def read_config(config_file: str):
     global multi_device_sync_config
     with open(config_file, "r") as f:
@@ -116,43 +144,6 @@ def sync_mode_from_str(sync_mode_str: str) -> OBMultiDeviceSyncMode:
         return OBMultiDeviceSyncMode.HARDWARE_TRIGGERING
     else:
         raise ValueError(f"Invalid sync mode: {sync_mode_str}")
-
-
-# def on_press(key):
-#     """
-#     当键盘被按下时调用。
-#     :param key: 被按下的键。
-#     """
-#     if hasattr(key, 'char') and key.char == 'k':
-#         # x=QposRecorder()
-#         posRecorder.real_right_arm.rm_set_tool_voltage(3)
-#         print(posRecorder.real_right_arm.rm_get_tool_voltage()[1])
-#         # print(f'Key "K" pressed')
-#
-# def on_release(key):
-#     """
-#     当键盘被释放时调用。
-#     :param key: 被释放的键。
-#     """
-#     if hasattr(key, 'char') and key.char == 'k':
-#         # x = QposRecorder()
-#         posRecorder.real_right_arm.rm_set_tool_voltage(0)
-#         print(posRecorder.real_right_arm.rm_get_tool_voltage()[1])
-#         print(f'Key "K" released')
-#     if key == Key.esc:
-#         # 停止监听器
-#         return False
-#
-# def start_listener():
-#     """
-#     启动键盘监听器的函数。
-#     """
-#     with Listener(on_press=on_press, on_release=on_release) as listener:
-#         listener.join()
-#
-# # 创建一个线程来运行监听器
-# listener_thread = threading.Thread(target=start_listener)
-# listener_thread.start()
 
 
 def start_streams(pipelines: List[Pipeline], configs: List[Config]):
@@ -358,6 +349,7 @@ def main():
         print(pre_time-start_time)
         for i in tqdm(range(max_timesteps)):
             now = time.time()
+
             # 创建并启动监听器
             # print(f"\n"
             #       f"-------------------------------------episode{i}-------------------------------------------------"
@@ -435,7 +427,7 @@ def main():
         stop_streams(pipelines)
 if __name__ == "__main__":
     start = time.time()
-    max_timesteps=250
+    max_timesteps=25000
     main()
     end = time.time()
     print(f"total time in 1 roll:{end-start}")

@@ -40,23 +40,19 @@ class ActionGenerator:
         """
         # 设置配置
         self.policy_config = {
-            'lr': args['lr'],
+            # 'lr': args['lr'],
             'num_queries': args['chunk_size'],
-            'kl_weight': args['kl_weight'],
-            'hidden_dim': args['hidden_dim'],
-            'dim_feedforward': args['dim_feedforward'],
-            'lr_backbone': 1e-5,
             'backbone': 'resnet18',
             'enc_layers': 4,
             'dec_layers': 7,
             'nheads': 8,
             'camera_names': ['top', 'right_wrist'],
-            'vq': args['use_vq'],
-            'vq_class': args['vq_class'],
-            'vq_dim': args['vq_dim'],
+            # 'vq': args['use_vq'],
+
             'action_dim': 9,
-            'no_encoder': args['no_encoder'],
+            # 'no_encoder': args['no_encoder'],
             'state_dim': 7,
+            "eval":args['eval']
         }
         self.config = {
             'ckpt_dir': args['ckpt_dir'],

@@ -134,6 +134,9 @@ def main():
     if device_list.get_count() == 0:
         print("No device connected")
         return
+    if device_list.get_count() == 1:
+        print("1 device connected")
+        return
     pipelines = []
     configs = []
     curr_device_cnt = device_list.get_count()
@@ -168,7 +171,7 @@ def main():
     if not os.path.exists(save_image_dir):
         os.mkdir(save_image_dir)
     start_streams(pipelines, configs)
-    max_timesteps = 300
+    max_timesteps = 100
     qpos_list = []
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
     actions_list = []
@@ -176,27 +179,16 @@ def main():
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': '/home/zhnh/Documents/project/act_arm_project/models/demo2',
+        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/models/12.17',
         'policy_class': 'ACT',
-        'kl_weight': 10,
-        'chunk_size': 300,
-        'hidden_dim': 512,
-        'batch_size': 8,
-        'dim_feedforward': 3200,
-        'num_steps': 2000,
-        'lr': 1e-5,
-        'seed': 0,
-        'use_vq': False,
-        'vq_class': None,
-        'vq_dim': None,
-        'no_encoder': False,
+        'chunk_size': 210,
     }
     ActionGenerator1= ActionGenerator(config)
     global stop_processing
     try:
-        # now = time.time()
         for i in range(max_timesteps):
             # 创建并启动监听器
+            start = time.time()
             print(f"\n"
                   f"---------------------------------------------episode{i}--------------------------------------------------------\n")
             image = process_frames(pipelines)
@@ -205,10 +197,10 @@ def main():
             radius_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
             # print(radius_qpos[6])
             qpos_list.append(radius_qpos)
-            images_dict['top']=image[0]
-            images_dict['right_wrist']=image[1]
-            cv2.imwrite(os.path.join(save_image_dir,f"top{i}.png"), np.array(images_dict['top']))
-            cv2.imwrite(os.path.join(save_image_dir,f"right{i}.png"), np.array(images_dict['right_wrist']))
+            images_dict['right_wrist']=image[0]
+            images_dict['top']=image[1]
+            cv2.imwrite(os.path.join(save_image_dir,current_time.strftime("%m-%d %H:%M") + f"top{i}.png"), np.array(images_dict['top']))
+            cv2.imwrite(os.path.join(save_image_dir,current_time.strftime("%m-%d %H:%M") + f"right{i}.png"), np.array(images_dict['right_wrist']))
             ActionGenerator1.image_dict = images_dict
             ActionGenerator1.qpos_list = radius_qpos
             # cv2.imshow("top" ,image[0])
@@ -216,6 +208,7 @@ def main():
             # key = cv2.waitKey(1)
             # if key == ord('q') or key == ESC_KEY:
             #     return
+
             now = time.time()
 
             actions = ActionGenerator1.get_action()
@@ -225,7 +218,7 @@ def main():
             qpos_list_.append(ActionGenerator1.qpos_list)
             actions_list.append(actions)
             power = actions[6]
-            print(power,step_caculate-now)
+            print(power,step_caculate-now, step_caculate - start)
             actions = [math.degrees(i) for i in actions[:6]]
             print(f":---------------------------------------actions--------------------"
                   f"--------------------------:\n{actions}")
@@ -238,7 +231,7 @@ def main():
             for i in result_action:
                 print(f"i:", i)
                 posRecorder.real_right_arm.rm_movej_canfd(i,False)
-                time.sleep(0.03)
+                time.sleep(0.01)
             if power > 3:
                 posRecorder.real_right_arm.rm_set_tool_voltage(3)
             else:
@@ -249,7 +242,7 @@ def main():
         stop_processing = True
     finally:
         print("===============Stopping pipelines==============")
-        path_save_image = os.path.join("/home/zhnh/Documents/project/act_arm_project/deploy",
+        path_save_image = os.path.join(r"/home/zhnh/Documents/project/act_arm_project/deploy",
                                            "deploy_image", current_time.strftime("%m-%d %H:%M") + ".png")
         visualize_joints(qpos_list_, actions_list, path_save_image)
         stop_streams(pipelines)

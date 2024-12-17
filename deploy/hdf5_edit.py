@@ -348,7 +348,15 @@ def read_image(image_path, decompress=False):
             raise ValueError(f"Failed to read the image at {image_path}.")
         return image_data
 
-
+def get_top_right_image(file_path, image_extension):
+    image_directory = file_path  # 图像文件夹路径
+    right_image = "camera_right_wrist"  # 图像文件名前缀
+    top_image = "camera_top"
+    # image_extension = ".jpg"  # 图像扩展名
+    # num_images = 137  # 图像数量
+    top__ = get_image_from_folder(image_directory, top_image, image_extension)
+    right__ = get_image_from_folder(image_directory, right_image, image_extension)
+    return top__, right__
 def save_hdf5(file_path, joints_nums, episode_idx, data_dict, reshape_hdf5_path):
     # 获取最大时间步数
 

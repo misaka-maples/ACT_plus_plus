@@ -12,7 +12,7 @@ import numpy as np
 from constants import RIGHT_ARM_TASK_CONFIGS
 from constants import HDF5_DIR
 import visualize_episodes
-
+# from ..test import save_hdf5_content
 camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
 max_timesteps = 0
 
@@ -28,17 +28,40 @@ def find_all_hdf5(dataset_dir, skip_mirrored_data):
     print(f'Found {len(hdf5_files)} hdf5 files')
     return hdf5_files
 
-
+def get_key(file_path):
+    data = []
+    with h5py.File(file_path, 'r') as hdf:
+        # 定义递归函数来遍历所有组和数据集
+        def visit_function(name, obj):
+            # print(name)  # 打印路径
+            data.append(name)
+        # 遍历 HDF5 文件中的所有路径
+        hdf.visititems(visit_function)
+        # print(data)
+    return data
 # 获取hdf5数据
 def get_state(file_path):
     try:
         with h5py.File(file_path, 'r') as f:
             compressed = f.attrs.get('compress', False)
-            # 检查是否存在原始的路径
-            top = 'observations/images/top'
-            right = 'observations/images/right_wrist'
-            qpos = 'observations/qpos'
-            action = 'action'
+            # print(compressed)
+            data = get_key(file_path)
+            # top_paths = [path for path in data if 'top' in path]            # 检查是否存在原始的路径
+            top_paths = [path for path in data if 'top' in path or 'high' in path]
+            right_paths = [path for path in data if 'right' in path]
+            qpos_paths = [path for path in data if 'qpos' in path]
+            action_paths = [path for path in data if 'action' in path]
+            # print(top)
+            # 确保每个路径至少有一个匹配项
+            if not top_paths or not right_paths or not qpos_paths or not action_paths:
+                raise KeyError(f"Paths not found in the HDF5 file.")
+
+            # 获取路径
+            top = top_paths[0]  # 如果有多个 'top'，只取第一个
+            right = right_paths[0]  # 如果有多个 'right'，只取第一个
+            qpos = qpos_paths[0]  # 如果有多个 'qpos'，只取第一个
+            action = action_paths[0]  # 如果有多个 'action'，只取第一个
+
             if top not in f:
                 raise KeyError(f"Path '{top}' not found in the HDF5 file.")
             if right not in f:
@@ -234,12 +257,14 @@ def save_video(file_path, fps=10, i=0):
     dataset_path = os.path.join(file_path, f'episode_{i}' + '.hdf5')
     try:
         with h5py.File(dataset_path, 'r') as f:
+            print(f.keys())
             original_path = 'observations/images/right_wrist'
             if original_path not in f:
                 raise KeyError(f"Path '{original_path}' not found in the HDF5 file.")
             original_path_top = 'observations/images/top'
             if original_path_top not in f:
                 raise KeyError(f"Path '{original_path_top}' not found in the HDF5 file.")
+
 
             right_wrist_data = f[original_path][()]  # 读取图像数据
             top_data = f[original_path_top][()]  # 读取图像数据
@@ -456,7 +481,7 @@ if __name__ == '__main__':
     # modify_hdf5(DATA_DIR + '\\reshape_hdf5\\episode_0.hdf5', compress=True)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
-    save_video('D:\\aloha\qpos_7_image_2\ACT_plus_plus\hdf5_file\\temo', fps=2, i=0)
+    # save_video(r'/home/zhnh/Documents/project/act_arm_project', fps=2, i=8)
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
@@ -481,7 +506,7 @@ if __name__ == '__main__':
     # print(image_paths)
     # batch_save_hdf5()
 
-    # _, _, qpos, actions = get_state(DATA_DIR + "\\reshape_hdf5_qpos_2\\episode_0.hdf5")
+    _, _, qpos, actions = get_state(DATA_DIR + "/save_dir/episode_8.hdf5")
     # # 假设 actions 是一个二维列表或数组
     # actions = [i - 2 for i in actions]
     #
@@ -494,4 +519,5 @@ if __name__ == '__main__':
     # # 打印修改后的第三列数据
     # # print([i[2] for i in actions])
     # # 将数据传入 visualize 函数
-    # visualize_episodes.visualize_joints(qpos, actions, DATA_DIR + '\\temp_-.png',)
+    # qpos, actions =  save_hdf5_content()
+    visualize_episodes.visualize_joints(qpos, actions, DATA_DIR + '/temp.png',)

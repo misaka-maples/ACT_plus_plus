@@ -116,24 +116,37 @@ def modify_hdf5(file_path, compress=None, truncate_ranges=None):
     try:
         with h5py.File(file_path, 'r+') as f:
             # 检查是否存在原始的路径
-            top = 'observations/images/top'
-            right = 'observations/images/right_wrist'
+            data = get_key(file_path)
+            # top_paths = [path for path in data if 'top' in path]            # 检查是否存在原始的路径
+            top_paths = [path for path in data if 'top' in path or 'high' in path]
+            right_paths = [path for path in data if 'right' in path]
+            qpos_paths = [path for path in data if 'qpos' in path]
+            action_paths = [path for path in data if 'action' in path]
+            # print(top)
+            # 确保每个路径至少有一个匹配项
+            if not top_paths or not right_paths or not qpos_paths or not action_paths:
+                raise KeyError(f"Paths not found in the HDF5 file.")
+
+            # 获取路径
+            top = top_paths[0]  # 如果有多个 'top'，只取第一个
+            right = right_paths[0]  # 如果有多个 'right'，只取第一个
+            qpos = qpos_paths[0]  # 如果有多个 'qpos'，只取第一个
+            action = action_paths[0]  # 如果有多个 'action'，只取第一个
+
             if top not in f:
                 raise KeyError(f"Path '{top}' not found in the HDF5 file.")
             if right not in f:
                 raise KeyError(f"Path '{right}' not found in the HDF5 file.")
-            original_path_pos = 'observations/qpos'
-            if original_path_pos not in f:
-                raise KeyError(f"Path '{original_path_pos}' not found in the HDF5 file.")
-            original_path_actions = 'action'
-            if original_path_actions not in f:
-                raise KeyError(f"Path '{original_path_actions}' not found in the HDF5 file.")
+            if qpos not in f:
+                raise KeyError(f"Path '{qpos}' not found in the HDF5 file.")
+            if action not in f:
+                raise KeyError(f"Path '{action}' not found in the HDF5 file.")
 
             # 获取原始数据
             camera_top_data = f[top][:]
             camera_right_data = f[right][:]
-            qpos = f[original_path_pos][:]
-            actions = f[original_path_actions][:]
+            qpos = f[qpos][:]
+            actions = f[action][:]
 
             # print(f"camera_top_data.shape: {camera_top_data.shape}, camera_right_data.shape: {camera_right_data.shape}")
 
@@ -478,7 +491,7 @@ if __name__ == '__main__':
     #     'right_wrist': (45, 100),
     #     'qpos': (45, 100),
     # }
-    # modify_hdf5(DATA_DIR + '\\reshape_hdf5\\episode_0.hdf5', compress=True)
+    modify_hdf5(DATA_DIR + '\\reshape_hdf5\\episode_0.hdf5', compress=True)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # save_video(r'/home/zhnh/Documents/project/act_arm_project', fps=2, i=8)

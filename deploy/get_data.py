@@ -53,18 +53,25 @@ key_state = False  # 按键状态：True 表示按下，False 表示松开
 # 按下按键时的回调
 def on_press(key):
     global key_state
-
-    if not key_state and key.char=='w':  # 避免重复触发
-        # print("按键被按下，开始执行任务...")
-        posRecorder.real_right_arm.rm_set_tool_voltage(3)
-        key_state = True
-
+    # if hasattr(key, 'char') and key.char == 'w':
+    #     print("Pressed 'w'")
+    try:
+        if key.char:  # 普通按键
+            if not key_state and key.char == 'w' and hasattr(key, 'char'):  # 避免重复触发
+                # print("按键被按下，开始执行任务...")
+                posRecorder.real_right_arm.rm_set_tool_voltage(3)
+                print(posRecorder.real_right_arm.rm_get_tool_voltage())
+                key_state = True
+    except AttributeError:
+        # 忽略特殊按键
+        pass
 # 松开按键时的回调
 def on_release(key):
     global key_state
     if key_state:  # 避免重复触发
         # print("\n\r\033[10G按键已松开，重置状态...", end="", flush=True)
         posRecorder.real_right_arm.rm_set_tool_voltage(0)
+        print(posRecorder.real_right_arm.rm_get_tool_voltage())
         key_state = False
 
     # 如果按下 ESC 键，退出监听

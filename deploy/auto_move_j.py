@@ -32,13 +32,17 @@ curr_device_cnt = 0
 config_file_path = os.path.join(os.path.dirname(__file__), "/home/zhnh/Documents/project/act_arm_project/pyorbbecsdk-main/config/multi_device_sync_config.json")
 multi_device_sync_config = {}
 camera_names = ['top', 'right_wrist']
+zero_pos = [0, 0, 0.8505, 0, 0, 3.14]
+original_pos =[-0.383979, 0.164255, 0.584912, 1.682, 1.083, -1.421]
+final_pos = [-0.426444, 0.337119, 0.251157, 2.559, 0.818, -0.857]
+standard_final_pos = [-0.345032, 0.342069, 0.482651, 1.606, 0.998, -1.569]
 
 
 class QposRecorder:
     def __init__(self):
         self.joint_state_right=None
         self.real_right_arm = (RoboticArm(rm_thread_mode_e.RM_TRIPLE_MODE_E))
-        self.arm_ini = self.real_right_arm.rm_create_robot_arm("192.168.1.16",8080, level=3)
+        self.arm_ini = self.real_right_arm.rm_create_robot_arm("192.168.1.18",8080, level=3)
         # self.robot_controller = RoboticArm("192.168.1.18", 8080, 3)
     def get_state(self):
         self.joint_state_right = self.real_right_arm.rm_get_current_arm_state()
@@ -246,7 +250,13 @@ def on_new_frame_callback(frames: FrameSet, index: int):
             frames_queue[index].get()
         frames_queue[index].put(frames)
 
-
+def rand_pos(standard_final_pos, b):
+    random_number = random.uniform(-b, b)
+    random_pos = standard_final_pos
+    random_pos[0] += random_number
+    random_pos[2] += random_number
+    print(random_pos)
+    return random_pos
 def save_images_from_dict(data_dict, output_dir):
     """
     保存字典中的图像到指定文件夹。
@@ -310,24 +320,40 @@ def button():
 
     # 主循环
     root.mainloop()
-def move_j():
-    posRecorder.real_right_arm.rm_set_tool_voltage(0)
-    zero_pos = [0, 0, 0.8505, 0, 0, 3.14]
-    original_pos = [-0.313938, -0.200482, 0.595444, -1.634, 1.022, 1.513]
-    first_pos = [-0.303659, -0.309748, 0.574611, -1.203, 1.204, 1.965]
-    second_pos = [-0.480535, 0.067788, 0.224124, -2.57, 0.514, 0.372]
-    final_pos = [-0.450568, -0.266124, 0.18606, -2.944, 0.576, 0.337]
+def move_j(rand_pos):
+    posRecorder.real_right_arm.rm_set_tool_voltage(3)
 
-    random_number = random.uniform(-0.02, 0.02)
-    random_pos = original_pos
-    random_pos[0]+=random_number
-    random_pos[2]+=random_number
-    x = posRecorder.get_state()
-    queue_action=[original_pos, final_pos, random_pos]
-    posRecorder.real_right_arm.rm_movej_p(queue_action[0], 7, 0, 1, 1)
-    call = posRecorder.real_right_arm.rm_movel(queue_action[1], 14, 0, 0, 0)
-    back = posRecorder.real_right_arm.rm_movej_p(queue_action[2],7, 0, 1, 1)
-def main():
+    queue_action=[original_pos, final_pos, rand_pos]
+    posRecorder.real_right_arm.rm_movej_p(queue_action[2], 14, 0, 1, 0)
+    temp_ = queue_action[2].copy()
+    temp_[1] = temp_[1]-0.1
+    # print(temp_)
+    posRecorder.real_right_arm.rm_movel(temp_, 14, 0, 1, 0)
+    posRecorder.real_right_arm.rm_movel(queue_action[1], 14, 0, 1, 0)
+    temp_ = queue_action[1].copy()
+    temp_[1] = temp_[1]-0.1
+    # print(temp_)
+    posRecorder.real_right_arm.rm_movej_p(temp_, 14, 0, 1, 0)
+    posRecorder.real_right_arm.rm_movej_p(queue_action[0],14, 0, 0, 0)
+def move_back(rand_):
+    rand_position = rand_pos(rand_,0.05)
+    # print(final_pos)
+    posRecorder.real_right_arm.rm_set_tool_voltage(3)
+    v=20
+    temp_ = final_pos.copy()
+    temp_[1] = temp_[1] - 0.1
+    posRecorder.real_right_arm.rm_movej_p(temp_, v, 0, 0, 1)
+    posRecorder.real_right_arm.rm_movej_p(final_pos, v, 0, 0, 1)
+
+    posRecorder.real_right_arm.rm_movej_p(temp_, v, 0, 0, 1)
+    posRecorder.real_right_arm.rm_movej_p(original_pos, v, 0, 0, 1)
+    posRecorder.real_right_arm.rm_movej_p(rand_position, v, 0, 0, 1)
+    posRecorder.real_right_arm.rm_set_tool_voltage(0)
+    print(rand_position)
+    posRecorder.real_right_arm.rm_movej_p(original_pos, v, 0, 0, 1)
+    return rand_position
+
+def main(rand_pos, indx):
     start_time = time.time()
     global curr_device_cnt, max_timesteps, qpos_list, images_dict, QposRecorder
     read_config(config_file_path)
@@ -389,25 +415,31 @@ def main():
     global stop_processing
     try:
         now = time.time()
-        print(pre_time-start_time)
+        # print(pre_time-start_time)
         for i in range(30):
             image = process_frames(pipelines)
         drop_time  = time.time()
-        print(drop_time-now)
-        wait_for_key('s')
-        move_j()
+        # print(drop_time-now)
+        # wait_for_key('s')
         j=0
-        first_trajectory = True
+        first_trajectory = False
         for i in tqdm(range(max_timesteps)):
+
+            if i==60:
+                move_j(rand_pos)
             now = time.time()
-            if posRecorder.real_right_arm.rm_get_arm_current_trajectory()['trajectory_type'] == 2 and j < 1 and first_trajectory:
+            if posRecorder.real_right_arm.rm_get_arm_current_trajectory()['trajectory_type'] == 2 and j < 1 :
                 posRecorder.real_right_arm.rm_set_tool_voltage(3)
                 j += 1
+                first_trajectory = True
+                # print("in first traj ")
             elif posRecorder.real_right_arm.rm_get_arm_current_trajectory()['trajectory_type'] == 1 and first_trajectory:
                 posRecorder.real_right_arm.rm_set_tool_voltage(0)
-
+            elif posRecorder.real_right_arm.rm_get_arm_current_trajectory()['trajectory_type'] == 0 and first_trajectory:
+                traj_time = time.time()
+                print(f"traj_time - drop_time{traj_time - drop_time}")
+                break
             image = process_frames(pipelines)
-
             angle_qpos = posRecorder.get_state()
             radius_qpos = [math.radians(j) for j in angle_qpos]
             radius_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
@@ -416,8 +448,8 @@ def main():
             if curr_device_cnt==1:
                 images_dict['top'].append(cv2.resize(image[0], (640, 480)))
             elif curr_device_cnt == 2:
-                images_dict['top'].append(cv2.resize(image[0], (640, 480)))
-                images_dict['right_wrist'].append(cv2.resize(image[1], (640, 480)))
+                images_dict['top'].append(cv2.resize(image[1], (640, 480)))
+                images_dict['right_wrist'].append(cv2.resize(image[0], (640, 480)))
             else:
                 raise "device error"
             for name in camera_names:
@@ -469,9 +501,9 @@ def main():
         save_hdf5(
             max_timesteps=max_timesteps,
             joints_nums=7,
-            episode_idx=1,
+            episode_idx=indx,
             data_dict=data_dict,
-            reshape_hdf5_path='/home/zhnh/Documents/project/act_arm_project/save_dir_hdf5_12_18'
+            reshape_hdf5_path='../save_dir_hdf5_12_19'
         )
         # 确保监听器线程被正确关闭
         # listener_thread.join()
@@ -479,7 +511,22 @@ def main():
         stop_streams(pipelines)
 if __name__ == "__main__":
     start = time.time()
-    max_timesteps=250
-    main()
+    max_timesteps=5000
+    posRecorder.real_right_arm.rm_set_arm_delete_trajectory()
+    posRecorder.real_right_arm.rm_movej_p(original_pos, 14, 0, 0, 1)
+    # time.sleep(1111)
+    # s= time.time()
+    main(standard_final_pos,0)
+    # move_back(standard_final_pos)
+    # time.sleep(1111)
+
+    for i in tqdm(range(50)):
+        print(f"i:{i+1}")
+        # print(posRecorder.real_right_arm.rm_get_tool_voltage())
+        final = move_back(standard_final_pos)
+
+        main(final,i+1)
     end = time.time()
     print(f"total time in 1 roll:{end-start}")
+
+

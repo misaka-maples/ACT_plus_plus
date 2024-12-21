@@ -271,16 +271,16 @@ def save_video(file_path, fps=10, i=0):
     try:
         with h5py.File(dataset_path, 'r') as f:
             print(f.keys())
-            original_path = 'observations/images/right_wrist'
-            if original_path not in f:
-                raise KeyError(f"Path '{original_path}' not found in the HDF5 file.")
-            original_path_top = 'observations/images/top'
-            if original_path_top not in f:
-                raise KeyError(f"Path '{original_path_top}' not found in the HDF5 file.")
+            right_image_path = 'observations/images/right_wrist'
+            if right_image_path not in f:
+                raise KeyError(f"Path '{right_image_path}' not found in the HDF5 file.")
+            top_image_path = 'observations/images/top'
+            if top_image_path not in f:
+                raise KeyError(f"Path '{top_image_path}' not found in the HDF5 file.")
 
 
-            right_wrist_data = f[original_path][()]  # 读取图像数据
-            top_data = f[original_path_top][()]  # 读取图像数据
+            right_wrist_data = f[right_image_path][()]  # 读取图像数据
+            top_data = f[top_image_path][()]  # 读取图像数据
             compressed = f.attrs.get('compress', False)
 
             image_list = []  # 用于存储解压后的帧
@@ -491,10 +491,10 @@ if __name__ == '__main__':
     #     'right_wrist': (45, 100),
     #     'qpos': (45, 100),
     # }
-    modify_hdf5(DATA_DIR + '\\reshape_hdf5\\episode_0.hdf5', compress=True)
+    # modify_hdf5(DATA_DIR + '\\reshape_hdf5\\episode_0.hdf5', compress=True)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
-    # save_video(r'/home/zhnh/Documents/project/act_arm_project', fps=2, i=8)
+    save_video(r'/home/zhnh/Documents/project/save_dir_hdf5_12_20', fps=30, i=0)
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
@@ -519,7 +519,7 @@ if __name__ == '__main__':
     # print(image_paths)
     # batch_save_hdf5()
 
-    _, _, qpos, actions = get_state(DATA_DIR + "/save_dir/episode_8.hdf5")
+    # _, _, qpos, actions = get_state(DATA_DIR + "/save_dir/episode_8.hdf5")
     # # 假设 actions 是一个二维列表或数组
     # actions = [i - 2 for i in actions]
     #
@@ -533,4 +533,4 @@ if __name__ == '__main__':
     # # print([i[2] for i in actions])
     # # 将数据传入 visualize 函数
     # qpos, actions =  save_hdf5_content()
-    visualize_episodes.visualize_joints(qpos, actions, DATA_DIR + '/temp.png',)
+    # visualize_episodes.visualize_joints(qpos, actions, DATA_DIR + '/temp.png',)

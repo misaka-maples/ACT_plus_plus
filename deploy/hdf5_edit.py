@@ -28,7 +28,15 @@ def find_all_hdf5(dataset_dir, skip_mirrored_data):
     print(f'Found {len(hdf5_files)} hdf5 files')
     return hdf5_files
 
-
+def get_top_right_image(file_path, image_extension):
+    image_directory = file_path  # 图像文件夹路径
+    right_image = "camera_right_wrist"  # 图像文件名前缀
+    top_image = "camera_top"
+    # image_extension = ".jpg"  # 图像扩展名
+    # num_images = 137  # 图像数量
+    top__ = get_image_from_folder(image_directory, top_image, image_extension)
+    right__ = get_image_from_folder(image_directory, right_image, image_extension)
+    return top__, right__
 # 获取hdf5数据
 def get_state(file_path):
     try:
@@ -439,16 +447,20 @@ def batch_save_hdf5():
 
 
 if __name__ == '__main__':
-    # truncate_ranges = {
-    #     'top': (45, 100),
-    #     'action': (45, 100),
-    #     'right_wrist': (45, 100),
-    #     'qpos': (45, 100),
-    # }
-    # modify_hdf5(DATA_DIR + '\\reshape_hdf5\\episode_0.hdf5', compress=True)
+    for i in range(50):
+        top , right , qpos ,action = get_state(f'/home/zhnh/Documents/project/save_dir_hdf5_12_20/episode_{i+1}.hdf5')
+        min_len = min(len(top),len(right),len(qpos),len(action))
+
+        truncate_ranges = {
+        'top': (0, min_len),
+        'action': (0, min_len),
+        'right_wrist': (0, min_len),
+        'qpos': (0, min_len),
+    }
+        modify_hdf5(f'/home/zhnh/Documents/project/save_dir_hdf5_12_20/episode_{i+1}.hdf5', compress=False, truncate_ranges=truncate_ranges)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
-    save_video('D:\\aloha\qpos_7_image_2\ACT_plus_plus\hdf5_file\\temo', fps=2, i=0)
+    # save_video('D:\\aloha\qpos_7_image_2\ACT_plus_plus\hdf5_file\\temo', fps=2, i=0)
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
@@ -487,3 +499,5 @@ if __name__ == '__main__':
     # # print([i[2] for i in actions])
     # # 将数据传入 visualize 函数
     # visualize_episodes.visualize_joints(qpos, actions, DATA_DIR + '\\temp_-.png',)
+    # top , right , qpos ,action = get_state('/home/zhnh/Documents/project/save_dir_hdf5_12_20/episode_46.hdf5')
+    # print(len(top),len(right),len(qpos),len(action))

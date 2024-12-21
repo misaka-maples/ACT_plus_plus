@@ -11,7 +11,7 @@ import numpy as np
 from pyorbbecsdk import *
 from utils import frame_to_bgr_image
 from pynput.keyboard import Listener, Key
-from policy_test import ActionGenerator
+from policy_action_generation import ActionGenerator
 frames_queue_lock = Lock()
 
 # Configuration settings

@@ -365,7 +365,7 @@ def main(rand_pos, indx, pipelines):
     qpos_list = []
     get_image_number = 0
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
-
+    max_len = 0
     global stop_processing
     try:
         now = time.time()
@@ -389,6 +389,7 @@ def main(rand_pos, indx, pipelines):
             elif posRecorder.real_right_arm.rm_get_arm_current_trajectory()['trajectory_type'] == 0 and first_trajectory:
                 traj_time = time.time()
                 print(f"traj_time - drop_time{traj_time - drop_time}")
+                max_len=i-1
                 break
             image = process_frames(pipelines)
             angle_qpos = posRecorder.get_state()
@@ -436,13 +437,13 @@ def main(rand_pos, indx, pipelines):
 
         # 构建数据字典
         data_dict = {
-            '/observations/qpos': qpos_list[:max_timesteps],
-            '/action': action_list[:max_timesteps],
+            '/observations/qpos': qpos_list[:max_len],
+            '/action': action_list[:max_len],
         }
         # print(data_dict)
         # 添加图像数据到字典
         for cam_name in camera_names:
-            data_dict[f'/observations/images/{cam_name}'] = images_dict[cam_name]
+            data_dict[f'/observations/images/{cam_name}'] = images_dict[cam_name][:max_len]
         # for i in len(data_dict['/observations/images/top']):
         #     filename_ = os.path.join(os.getcwd(), "color_images_", f"color_image_top_{i}.png")
         #     cv2.imwrite(filename_, cv2.resize(image[0], (640, 480)))

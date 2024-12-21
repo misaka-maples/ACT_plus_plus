@@ -73,7 +73,7 @@ class DETRVAE(nn.Module):
         # 如果有骨干网络（用于处理图像输入）
         if backbones is not None:
             # 将骨干网络的输出通道数投影到 Transformer 的隐藏维度
-            self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
+            self.input_proj = nn.Conv2d(backbones[0].num_channels, 384, kernel_size=1)
             self.backbones = nn.ModuleList(backbones)  # 保存多个骨干网络
             # 将机器人状态映射到 Transformer 的隐藏维度
             self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)

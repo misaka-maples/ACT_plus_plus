@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from utils import frame_to_bgr_image, visualize_joints
 # from pynput.keyboard import Listener, Key
-from policy_test import ActionGenerator
+from policy_action_generation import ActionGenerator
 frames_queue_lock = Lock()
 import datetime
 

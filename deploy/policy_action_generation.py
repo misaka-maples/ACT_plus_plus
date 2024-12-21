@@ -13,7 +13,7 @@ def get_env():
     sys.path.append(str(robomimic_path))
 get_env()
 
-from imitate_episodes import make_policy, set_seed
+from utils import make_policy
 from constants import SIM_TASK_CONFIGS
 from detr.models.latent_model import Latent_Model_Transformer
 import os

@@ -4,7 +4,7 @@ import argparse
 from Robotic_Arm.rm_robot_interface import RoboticArm
 # from deploy.rem_test import current_time
 from hdf5_edit import get_state
-from policy_test import ActionGenerator
+from policy_action_generation import ActionGenerator
 import numpy as np
 import math
 import torch
@@ -50,21 +50,21 @@ def rand_action():
 camera_names = ['top', 'right_wrist']
 def main(args):
     camera_top_data, camera_right_data, qpos_list, action_ = get_state(
-        '/home/zhnh/Documents/project/act_arm_project/episode_8.hdf5')
+        '/home/zhnh/Documents/project/save_dir_hdf5_12_20/episode_38.hdf5')
     # actions_list = []
     # qpos_list = []
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
     actions_list = []
     qpos_list_ = []
     loss = []
-    loop_len = len(camera_right_data)
+    loop_len = len(camera_right_data)-100
     if args['folder_get_image']:
         image_directory = r"D:\aloha\ACT_plus_plus\hdf5_file\04"  # 图像文件夹路径
         top_image, right_image = get_top_right_image(image_directory, '.jpg')
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/models/12.17',
+        'ckpt_dir': r'/home/zhnh/Documents/project',
         'policy_class': 'ACT',
         'chunk_size': 210,
     }
@@ -81,8 +81,8 @@ def main(args):
         #     'right_wrist': right__[i],
         # }
         # print(image_dict)
-        # qpos = qpos_list[i]
-        qpos = posRecorder.get_state()
+        qpos = qpos_list[i]
+        # qpos = posRecorder.get_state()
         radius_qpos = [math.radians(j) for j in qpos]
         ActionGeneration.image_dict = image_dict
         ActionGeneration.qpos_list = radius_qpos
@@ -93,12 +93,12 @@ def main(args):
         loss.append((actions - action_[i]) ** 2)
         power = actions[6]
         print(power)
-        if power > 2.7:
-            posRecorder.real_right_arm.rm_set_tool_voltage(3)
-        else:
-            posRecorder.real_right_arm.rm_set_tool_voltage(0)
-        actions = [i * 180.0 / math.pi for i in actions[:6]]
-        posRecorder.real_right_arm.rm_movej(actions, 50, 0, 0, 1)
+        # if power > 2.7:
+        #     posRecorder.real_right_arm.rm_set_tool_voltage(3)
+        # else:
+        #     posRecorder.real_right_arm.rm_set_tool_voltage(0)
+        # actions = [i * 180.0 / math.pi for i in actions[:6]]
+        # posRecorder.real_right_arm.rm_movej(actions, 50, 0, 0, 1)
 
     path_save_image = os.path.join(os.getcwd(), "deploy_image")
     if os.path.exists(path_save_image) is False:

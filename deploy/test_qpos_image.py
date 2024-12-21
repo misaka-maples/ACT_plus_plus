@@ -1,4 +1,4 @@
-from policy_test import ActionGenerator
+from policy_action_generation import ActionGenerator
 import torch
 import numpy as np
 import argparse

@@ -10,6 +10,8 @@ import cv2
 import numpy as np
 # from decorator import EMPTY
 from pyorbbecsdk import *
+from tqdm import tqdm
+
 from utils import frame_to_bgr_image, visualize_joints
 # from pynput.keyboard import Listener, Key
 from policy_test import ActionGenerator
@@ -179,14 +181,14 @@ def main():
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/models/12.17',
+        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/models/12_19',
         'policy_class': 'ACT',
-        'chunk_size': 210,
+        'chunk_size': 100,
     }
     ActionGenerator1= ActionGenerator(config)
     global stop_processing
     try:
-        for i in range(max_timesteps):
+        for i in tqdm(range(max_timesteps)):
             # 创建并启动监听器
             start = time.time()
             print(f"\n"
@@ -222,16 +224,16 @@ def main():
             actions = [math.degrees(i) for i in actions[:6]]
             print(f":---------------------------------------actions--------------------"
                   f"--------------------------:\n{actions}")
-            # posRecorder.real_right_arm.rm_movej(actions, 20, 0, 0, 1)
+            posRecorder.real_right_arm.rm_movej(actions, 10, 0, 0, 1)
             angle_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
             # print(angle_qpos[:6], actions)
 
-            result_action = interpolate_with_step_limit(angle_qpos[:6], actions, 2)
+            # result_action = interpolate_with_step_limit(angle_qpos[:6], actions, 2)
             # print(f"result-action:{result_action}")
-            for i in result_action:
-                print(f"i:", i)
-                posRecorder.real_right_arm.rm_movej_canfd(i,False)
-                time.sleep(0.01)
+            # for i in result_action:
+            #     print(f"i:", i)
+            #     posRecorder.real_right_arm.rm_movej_canfd(i,False)
+                # time.sleep(0.01)
             if power > 3:
                 posRecorder.real_right_arm.rm_set_tool_voltage(3)
             else:
@@ -283,7 +285,7 @@ def interpolate_with_step_limit(array1, array2, step=10):
 
 if __name__ == "__main__":
     current_time = datetime.datetime.now()
-
+    max_timesteps = 300
     start = time.time()
     main()
     end = time.time()

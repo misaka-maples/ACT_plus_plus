@@ -35,7 +35,7 @@ camera_names = ['top', 'right_wrist']
 zero_pos = [0, 0, 0.8505, 0, 0, 3.14]
 original_pos =[-0.383979, 0.164255, 0.584912, 1.682, 1.083, -1.421]
 final_pos = [-0.426444, 0.337119, 0.251157, 2.559, 0.818, -0.857]
-standard_final_pos = [-0.345032, 0.342069, 0.482651, 1.606, 0.998, -1.569]
+standard_final_pos = [-0.295032, 0.342069, 0.462651, 1.606, 0.998, -1.569]
 
 
 class QposRecorder:
@@ -252,7 +252,7 @@ def on_new_frame_callback(frames: FrameSet, index: int):
 
 def rand_pos(standard_final_pos, b):
     random_number = random.uniform(-b, b)
-    random_pos = standard_final_pos
+    random_pos = standard_final_pos.copy()
     random_pos[0] += random_number
     random_pos[2] += random_number
     print(random_pos)
@@ -347,24 +347,22 @@ def move_back(rand_):
 
     posRecorder.real_right_arm.rm_movej_p(temp_, v, 0, 0, 1)
     posRecorder.real_right_arm.rm_movej_p(original_pos, v, 0, 0, 1)
-    posRecorder.real_right_arm.rm_movej_p(rand_position, v, 0, 0, 1)
+    while True:
+
+        rand_pos_back = posRecorder.real_right_arm.rm_movej_p(rand_position, v, 0, 0, 1)
+        if rand_pos_back==1:
+            print(f"error pos:{rand_position} rand again")
+        elif rand_pos_back==0:
+            break
     posRecorder.real_right_arm.rm_set_tool_voltage(0)
-    print(rand_position)
     posRecorder.real_right_arm.rm_movej_p(original_pos, v, 0, 0, 1)
     return rand_position
 
 def main(rand_pos, indx):
-    start_time = time.time()
     global curr_device_cnt, max_timesteps, qpos_list, images_dict, QposRecorder
     read_config(config_file_path)
     ctx = Context()
     device_list = ctx.query_devices()
-    # device_info = device_list[0].get_device_info()
-    # device_name = device_info.get_name()
-    # device_pid = device_info.get_pid()
-    # serial_number = device_info.get_serial_number()
-
-    # print(f"device :-----------------------", device_name)
     if device_list.get_count() == 0:
         print("No device connected")
         return
@@ -503,7 +501,7 @@ def main(rand_pos, indx):
             joints_nums=7,
             episode_idx=indx,
             data_dict=data_dict,
-            reshape_hdf5_path='../save_dir_hdf5_12_19'
+            reshape_hdf5_path='../save_dir_hdf5_12_20'
         )
         # 确保监听器线程被正确关闭
         # listener_thread.join()
@@ -520,7 +518,7 @@ if __name__ == "__main__":
     # move_back(standard_final_pos)
     # time.sleep(1111)
 
-    for i in tqdm(range(50)):
+    for i in range(50):
         print(f"i:{i+1}")
         # print(posRecorder.real_right_arm.rm_get_tool_voltage())
         final = move_back(standard_final_pos)

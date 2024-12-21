@@ -27,7 +27,7 @@ save_color_image_dir = os.path.join(os.getcwd(), "color_images")
 frames_queue: List[Queue] = [Queue() for _ in range(MAX_DEVICES)]
 stop_processing = False
 curr_device_cnt = 0
-
+serial_number=[]
 # Load config file for multiple devices
 config_file_path = os.path.join(os.path.dirname(__file__), "/home/zhnh/Documents/project/act_arm_project/pyorbbecsdk-main/config/multi_device_sync_config.json")
 multi_device_sync_config = {}
@@ -114,7 +114,7 @@ def read_config(config_file: str):
 def process_frames(pipelines):
     global frames_queue
     global stop_processing
-    global curr_device_cnt, save_points_dir, save_depth_image_dir, save_color_image_dir
+    global curr_device_cnt, save_points_dir, save_depth_image_dir, save_color_image_dir, serial_number
     all_frames_processed = False  # 添加一个标志来指示是否所有帧都已处理
     images = {}
     while not stop_processing and not all_frames_processed:
@@ -314,10 +314,11 @@ def button():
 
 def main():
     start_time = time.time()
-    global curr_device_cnt, max_timesteps, qpos_list, images_dict, QposRecorder
+    global curr_device_cnt, max_timesteps, qpos_list, images_dict, QposRecorder, serial_number
     read_config(config_file_path)
     ctx = Context()
     device_list = ctx.query_devices()
+
     # device_info = device_list[0].get_device_info()
     # device_name = device_info.get_name()
     # device_pid = device_info.get_pid()
@@ -329,32 +330,34 @@ def main():
         return
     pipelines = []
     configs = []
+    serial_number=[]
     curr_device_cnt = device_list.get_count()
     for i in range(min(device_list.get_count(), MAX_DEVICES)):
         device = device_list.get_device_by_index(i)
         pipeline = Pipeline(device)
         config = Config()
-        serial_number = device.get_device_info().get_serial_number()
-        sync_config_json = multi_device_sync_config[serial_number]
-        sync_config = device.get_multi_device_sync_config()
-        sync_config.mode = sync_mode_from_str(sync_config_json["config"]["mode"])
-        sync_config.color_delay_us = sync_config_json["config"]["color_delay_us"]
-        sync_config.depth_delay_us = sync_config_json["config"]["depth_delay_us"]
-        sync_config.trigger_out_enable = sync_config_json["config"]["trigger_out_enable"]
-        sync_config.trigger_out_delay_us = sync_config_json["config"]["trigger_out_delay_us"]
-        sync_config.frames_per_trigger = sync_config_json["config"]["frames_per_trigger"]
-        device.set_multi_device_sync_config(sync_config)
-        print(f"Device {serial_number} sync config: {sync_config}")
+        temp = device.get_device_info().get_serial_number()
+        serial_number.append(temp)
+        # sync_config_json = multi_device_sync_config[temp]
+        # sync_config = device.get_multi_device_sync_config()
+        # sync_config.mode = sync_mode_from_str(sync_config_json["config"]["mode"])
+        # sync_config.color_delay_us = sync_config_json["config"]["color_delay_us"]
+        # sync_config.depth_delay_us = sync_config_json["config"]["depth_delay_us"]
+        # sync_config.trigger_out_enable = sync_config_json["config"]["trigger_out_enable"]
+        # sync_config.trigger_out_delay_us = sync_config_json["config"]["trigger_out_delay_us"]
+        # sync_config.frames_per_trigger = sync_config_json["config"]["frames_per_trigger"]
+        # device.set_multi_device_sync_config(sync_config)
+        # print(f"Device {serial_number} sync config: {sync_config}")
 
         profile_list = pipeline.get_stream_profile_list(OBSensorType.COLOR_SENSOR)
         color_profile = profile_list.get_default_video_stream_profile()
         config.enable_stream(color_profile)
-        print(f"Device {serial_number} color profile: {color_profile}")
+        # print(f"Device {serial_number} color profile: {color_profile}")
 
-        profile_list = pipeline.get_stream_profile_list(OBSensorType.DEPTH_SENSOR)
-        depth_profile = profile_list.get_default_video_stream_profile()
-        print(f"Device {serial_number} depth profile: {depth_profile}")
-        config.enable_stream(depth_profile)
+        # profile_list = pipeline.get_stream_profile_list(OBSensorType.DEPTH_SENSOR)
+        # depth_profile = profile_list.get_default_video_stream_profile()
+        # print(f"Device {serial_number} depth profile: {depth_profile}")
+        # config.enable_stream(depth_profile)
         pipelines.append(pipeline)
         configs.append(config)
     # max_timesteps = 400
@@ -398,20 +401,18 @@ def main():
             # print(radius_qpos[6])
             qpos_list.append(radius_qpos)
             if curr_device_cnt==1:
-                images_dict['top'].append(cv2.resize(image[0], (640, 480)))
+                pass
             elif curr_device_cnt == 2:
-                images_dict['top'].append(cv2.resize(image[0], (640, 480)))
-                images_dict['right_wrist'].append(cv2.resize(image[1], (640, 480)))
+                images_dict['top'].append(cv2.resize(image[1], (640, 480)))
+                images_dict['right_wrist'].append(cv2.resize(image[0], (640, 480)))
             else:
                 raise "device error"
-            for name in camera_names:
-                filename_ = os.path.join(os.getcwd(), "color_images", f"color_image_{name}_{i}.png")
-                if name =='top' and get_image_number <=0:
-                    # print(get_image_number)
-                    cv2.imwrite(filename_,cv2.resize(image[0], (640, 480)))
-                if name == 'right_wrist' and curr_device_cnt == 2 and get_image_number <=0:
-                    cv2.imwrite(filename_,cv2.resize(image[1], (640, 480)))
-                    get_image_number += 1
+            if i==0:
+                filename_right= os.path.join(os.getcwd(), "color_images", f"color_image_right_0.png")
+                cv2.imwrite(filename_right,cv2.resize(images_dict['right_wrist'][0], (640, 480)))
+                filename_top= os.path.join(os.getcwd(), "color_images", f"color_image_top_0.png")
+                cv2.imwrite(filename_top,cv2.resize(images_dict['top'][0], (640, 480)))
+
 
             # print(f"7 joint :{posRecorder.get_state()[-1]}")
             # print(angle_qpos[1])
@@ -463,7 +464,7 @@ def main():
         stop_streams(pipelines)
 if __name__ == "__main__":
     start = time.time()
-    max_timesteps=25000
+    max_timesteps=25
     main()
     end = time.time()
     print(f"total time in 1 roll:{end-start}")

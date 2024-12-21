@@ -16,7 +16,7 @@ import time
 
 from visualize_episodes import visualize_joints
 from hdf5_edit import get_state
-from policy_test import ActionGenerator as OriginalActionGenerator
+from policy_action_generation import ActionGenerator as OriginalActionGenerator
 from robotic_arm_package.robotic_arm import *
 from image_recorder_ros2 import ImageRecorder
 

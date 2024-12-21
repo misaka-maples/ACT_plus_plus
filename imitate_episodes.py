@@ -48,8 +48,8 @@ from visualize_episodes import save_videos
 from detr.models.latent_model import Latent_Model_Transformer
 from sim_env import BOX_POSE
 import os
-os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
-# settings = wandb.Settings(
+# os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
+# settings = wandb.Set tings(
 #     moitor_=False,       # 禁用 GPU 监控
 #     monitor_cpu=False,        # 禁用 CPU 监控
 #     monitor_network=False,    # 禁用网络监控
@@ -84,9 +84,6 @@ def main(args):
     elif task_name == 'train' or task_name == 'train_test':
         from constants import RIGHT_ARM_TASK_CONFIGS
         task_config = RIGHT_ARM_TASK_CONFIGS[task_name]
-    else:
-        from aloha_scripts.constants import TASK_CONFIGS
-        task_config = TASK_CONFIGS[task_name]
     is_eval = args['eval']
     ckpt_dir = task_config['ckpt_dir']
     policy_class = task_config['policy_class']
@@ -355,9 +352,6 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
 
     # load environment
     if real_robot:
-        from aloha_scripts.robot_utils import move_grippers  # requires aloha
-        from aloha_scripts.real_env import make_real_env  # requires aloha
-        env = make_real_env(init_node=True, setup_robots=True, setup_base=True)
         env_max_reward = 0
     else:
         from sim_env import make_sim_env
@@ -538,7 +532,6 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
             print(f'Avg fps {max_timesteps / (time.time() - time0)}')
             plt.close()
         if real_robot:
-            move_grippers([env.puppet_bot_left, env.puppet_bot_right], [PUPPET_GRIPPER_JOINT_OPEN] * 2, move_time=0.5)  # open
             # save qpos_history_raw
             log_id = get_auto_index(ckpt_dir)
             np.save(os.path.join(ckpt_dir, f'qpos_{log_id}.npy'), qpos_history_raw)
@@ -636,7 +629,7 @@ def train_bc(train_dataloader, val_dataloader, config):
                         break
 
                 validation_summary = compute_dict_mean(validation_dicts)
-                print(f"validation_dicts:{validation_dicts}\nvalidation_summary:{validation_summary}")
+                # print(f"validation_dicts:{validation_dicts}\nvalidation_summary:{validation_summary}")
                 epoch_val_loss = validation_summary['loss']
                 if epoch_val_loss < min_val_loss:
                     min_val_loss = epoch_val_loss

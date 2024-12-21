@@ -32,7 +32,7 @@ from sensor_msgs.msg import JointState
 from cv_bridge import CvBridge
 from tqdm import tqdm
 import time
-from policy_test import ActionGenerator
+from policy_action_generation import ActionGenerator
 from robotic_arm_package.robotic_arm import *
 import math
 from image_recorder_ros2 import ImageRecorder

@@ -127,7 +127,7 @@ def on_new_frame_callback(frames: FrameSet, index: int):
             frames_queue[index].get()
         frames_queue[index].put(frames)
 
-
+max_timesteps=0
 def main():
     global curr_device_cnt, max_timesteps, qpos_list, images_dict, QposRecorder
     read_config(config_file_path)
@@ -181,9 +181,9 @@ def main():
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/models/12_19',
+        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/models/auto_1_12-21',
         'policy_class': 'ACT',
-        'chunk_size': 100,
+        'chunk_size': 210,
     }
     ActionGenerator1= ActionGenerator(config)
     global stop_processing
@@ -285,7 +285,7 @@ def interpolate_with_step_limit(array1, array2, step=10):
 
 if __name__ == "__main__":
     current_time = datetime.datetime.now()
-    max_timesteps = 300
+    max_timesteps = 3000
     start = time.time()
     main()
     end = time.time()

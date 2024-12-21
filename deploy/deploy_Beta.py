@@ -92,7 +92,7 @@ def main(args):
         actions_list.append(actions)
         loss.append((actions - action_[i]) ** 2)
         power = actions[6]
-        print(power)
+        # print(power)
         # if power > 2.7:
         #     posRecorder.real_right_arm.rm_set_tool_voltage(3)
         # else:

@@ -22,7 +22,7 @@ def get_args_parser():
 
     # Model parameters
     # * Backbone
-    parser.add_argument('--backbone', default='resnet18', type=str, # will be overridden
+    parser.add_argument('--backbone', default='dino_v2', type=str, # will be overridden
                         help="Name of the convolutional backbone to use")
     parser.add_argument('--dilation', action='store_true',
                         help="If true, we replace stride with dilation in the last convolutional block (DC5)")

@@ -73,7 +73,16 @@ class DETRVAE(nn.Module):
         # 如果有骨干网络（用于处理图像输入）
         if backbones is not None:
             # 将骨干网络的输出通道数投影到 Transformer 的隐藏维度
-            self.input_proj = nn.Conv2d(backbones[0].num_channels, 384, kernel_size=1)
+            # self.input_proj = nn.Conv2d(backbones[0].num_channels, 384, kernel_size=1)
+            # print(backbones[0].num_channels)
+            self.input_proj = nn.ModuleList([
+                nn.Conv2d(512, 512, kernel_size=1) for backbone in backbones
+            ])
+            # 在 detr_vae.py 的模型初始化部分
+            # self.input_proj = nn.ModuleList([
+            #     nn.Conv2d(512, 384, kernel_size=1) for _ in range(num_cameras)
+            # ])
+
             self.backbones = nn.ModuleList(backbones)  # 保存多个骨干网络
             # 将机器人状态映射到 Transformer 的隐藏维度
             self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
@@ -83,6 +92,8 @@ class DETRVAE(nn.Module):
             self.input_proj_env_state = nn.Linear(7, hidden_dim)  # 环境状态映射
             self.pos = torch.nn.Embedding(2, hidden_dim)  # 位置编码（仅用于状态）
             self.backbones = None
+        for i, backbone in enumerate(self.backbones):
+            print(f"Backbone {i}: Expected output channels = {backbone.num_channels}")
 
         # 编码器额外参数
         self.latent_dim = 32  # 潜在空间的维度（可调节）
@@ -205,14 +216,20 @@ class DETRVAE(nn.Module):
             # 处理每个相机的图像特征和位置编码
             all_cam_features = []
             all_cam_pos = []
+
             for cam_id, cam_name in enumerate(self.camera_names):
                 # features, pos = self.backbones[cam_id](image[:, cam_id])
                 features, pos = self.backbones[cam_id](image[:, cam_id])
 
+
                 features = features[0]  # 使用最后一层特征
+                # print(features.shape)
                 pos = pos[0]
-                all_cam_features.append(self.input_proj(features))
+                features_proj = self.input_proj[cam_id](features)  # 投影到统一通道数
+                # all_cam_features.append(self.input_proj(features))
+                all_cam_features.append(features_proj)
                 all_cam_pos.append(pos)
+
             # 处理机器人状态特征
             proprio_input = self.input_proj_robot_state(qpos)
             # 将所有相机特征合并

@@ -48,7 +48,7 @@ from visualize_episodes import save_videos
 from detr.models.latent_model import Latent_Model_Transformer
 from sim_env import BOX_POSE
 import os
-# os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
+os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
 # settings = wandb.Set tings(
 #     moitor_=False,       # 禁用 GPU 监控
 #     monitor_cpu=False,        # 禁用 CPU 监控
@@ -84,7 +84,7 @@ def main(args):
     elif task_name == 'train' or task_name == 'train_test':
         from constants import RIGHT_ARM_TASK_CONFIGS
         task_config = RIGHT_ARM_TASK_CONFIGS[task_name]
-    is_eval = args['eval']
+    is_eval = task_config['eval']
     ckpt_dir = task_config['ckpt_dir']
     policy_class = task_config['policy_class']
     onscreen_render = args['onscreen_render']
@@ -131,7 +131,8 @@ def main(args):
                          'vq_dim': args['vq_dim'],
                          'action_dim': 9,
                          'no_encoder': args['no_encoder'],
-                         'state_dim': 7
+                         'state_dim': 7,
+                         'eval':is_eval,
                          }
     elif policy_class == 'Diffusion':
 
@@ -192,19 +193,19 @@ def main(args):
     #     wandb.config.update(config)
     with open(config_path, 'wb') as f:
         pickle.dump(config, f)
-    if is_eval:
-        ckpt_names = [f'policy_last.ckpt']
-        results = []
-        for ckpt_name in ckpt_names:
-            # with PyCallGraph(output=GraphvizOutput()):
-            success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=1)
-            # wandb.log({'success_rate': success_rate, 'avg_return': avg_return})
-            results.append([ckpt_name, success_rate, avg_return])
-
-        for ckpt_name, success_rate, avg_return in results:
-            print(f'{ckpt_name}: {success_rate=} {avg_return=}')
-        print()
-        exit()
+    # if is_eval:
+    #     ckpt_names = [f'policy_last.ckpt']
+    #     results = []
+    #     for ckpt_name in ckpt_names:
+    #         # with PyCallGraph(output=GraphvizOutput()):
+    #         success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=1)
+    #         # wandb.log({'success_rate': success_rate, 'avg_return': avg_return})
+    #         results.append([ckpt_name, success_rate, avg_return])
+    #
+    #     for ckpt_name, success_rate, avg_return in results:
+    #         print(f'{ckpt_name}: {success_rate=} {avg_return=}')
+    #     print()
+    #     exit()
 
     train_dataloader, val_dataloader, stats, _ = load_data(dataset_dir, name_filter, camera_names, batch_size_train, batch_size_val, task_config['chunk_size'], args['skip_mirrored_data'], config['load_pretrain'], policy_class, stats_dir_l=stats_dir, sample_weights=sample_weights, train_ratio=train_ratio)
 

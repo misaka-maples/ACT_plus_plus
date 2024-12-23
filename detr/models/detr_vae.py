@@ -33,7 +33,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
     return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
 
-class DETR_VAE(nn.Module):
+class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
 
     def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries,vq, vq_class, vq_dim, camera_names):
@@ -161,7 +161,7 @@ class DETR_VAE(nn.Module):
         is_pad_hat = self.is_pad_head(hs)
         return a_hat, is_pad_hat, [mu, logvar], probs, binaries
 
-class DETRVAE(nn.Module):
+class DETR_VAE(nn.Module):
     """ DETR 模块，带有变分自编码器 (VAE) 架构，用于目标检测 """
 
     def __init__(self, backbones, transformer, encoder, state_dim, num_queries, camera_names, vq, vq_class, vq_dim, action_dim):

@@ -84,7 +84,7 @@ RIGHT_ARM_TASK_CONFIGS = {
         'eval': False,
         'backbone': 'dino_v2',
         'qpos_noise_std': 0,
-        # 'dropout': 0.3,
+        'dropout': 0.3,
     },
     'train_test': {
         'dataset_dir': HDF5_DIR,

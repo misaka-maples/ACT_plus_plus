@@ -4,7 +4,7 @@ import os
 ### Task parameters
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 
-DATA_DIR = 'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_model'
+DATA_DIR = r'D:\aloha\editnet\hdf5_model'
 # DATA_DIR = r'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_file'
 HDF5_DIR = DATA_DIR + r'\save_dir'
 SIM_TASK_CONFIGS = {
@@ -81,8 +81,9 @@ RIGHT_ARM_TASK_CONFIGS = {
         'load_pretrain': False,
         'resume_ckpt_path': DATA_DIR + 'policy_best.ckpt',
         'loss_save_every': 500,
-        'eval':False,
-        'backbone':'dino_v2',
+        'eval': False,
+        'backbone': 'dino_v2',
+        'qpos_noise_std': 0,
     },
     'train_test': {
         'dataset_dir': HDF5_DIR,

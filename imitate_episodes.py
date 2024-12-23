@@ -134,6 +134,7 @@ def main(args):
                          'state_dim': 7,
                          'eval': False,
                          'qpos_noise_std': task_config['qpos_noise_std'],
+                         'dropout': task_config['dropout'],
                          }
     elif policy_class == 'Diffusion':
 

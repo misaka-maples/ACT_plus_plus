@@ -6,7 +6,7 @@ import os
 
 DATA_DIR = r'D:\aloha\editnet\hdf5_model'
 # DATA_DIR = r'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_file'
-HDF5_DIR = DATA_DIR + r'\save_dir'
+HDF5_DIR = DATA_DIR + r'\save_dir_hdf5_12_23_noon'
 SIM_TASK_CONFIGS = {
     'sim_transfer_cube_scripted': {
         'dataset_dir': DATA_DIR,
@@ -84,6 +84,7 @@ RIGHT_ARM_TASK_CONFIGS = {
         'eval': False,
         'backbone': 'dino_v2',
         'qpos_noise_std': 0,
+        # 'dropout': 0.3,
     },
     'train_test': {
         'dataset_dir': HDF5_DIR,

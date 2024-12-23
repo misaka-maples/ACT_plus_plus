@@ -133,6 +133,7 @@ def main(args):
                          'no_encoder': args['no_encoder'],
                          'state_dim': 7,
                          'eval': False,
+                         'qpos_noise_std': task_config['qpos_noise_std'],
                          }
     elif policy_class == 'Diffusion':
 

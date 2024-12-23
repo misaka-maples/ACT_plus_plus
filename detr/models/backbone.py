@@ -91,15 +91,16 @@ class BackboneBase(nn.Module):
 
 class Backbone(BackboneBase):
     """ResNet backbone with frozen BatchNorm."""
+
     def __init__(self, name: str,
                  train_backbone: bool,
                  return_interm_layers: bool,
                  dilation: bool):
-        weights = get_model_weights(name).DEFAULT
         backbone = getattr(torchvision.models, name)(
             replace_stride_with_dilation=[False, False, dilation],
-            weights=weights, norm_layer=FrozenBatchNorm2d) # pretrained # TODO do we want frozen batch_norm??
-        num_channels = 384 if name in ('resnet18', 'resnet34','dino_v2') else 2048
+            pretrained=is_main_process(),
+            norm_layer=FrozenBatchNorm2d)  # pretrained # TODO do we want frozen batch_norm??
+        num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
         super().__init__(backbone, train_backbone, num_channels, return_interm_layers)
 
 def pad_image(image, patch_size=14):
@@ -122,7 +123,7 @@ def pad_image(image, patch_size=14):
 class DINOv2BackBone(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.body = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14',pretrained=True)
+        self.body = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
         self.body.eval()
         self.num_channels = 384
 

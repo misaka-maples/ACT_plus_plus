@@ -225,8 +225,39 @@ class ACTPolicy(nn.Module):
         - 推理模式: 预测动作。
         """
         env_state = None
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        image = normalize(image)  # 归一化图像输入
+        # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        # image = normalize(image)  # 归一化图像输入
+        patch_h = 16
+        patch_w = 22
+
+        if actions is not None:  # training time
+            # transform = v2.Compose([
+            #     v2.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
+            #     v2.RandomPerspective(distortion_scale=0.5),
+            #     v2.RandomAffine(degrees=10, translate=(0.1,0.1), scale=(0.9,1.1)),
+            #     v2.GaussianBlur(kernel_size=(9,9), sigma=(0.1,2.0)),
+            #     v2.Normalize(
+            #         mean=[0.485, 0.456, 0.406],
+            #         std=[0.229, 0.224, 0.225])
+            # ])
+            transform = transforms.Compose([
+                # v2.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
+                # v2.RandomPerspective(distortion_scale=0.5),
+                # v2.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+                # v2.GaussianBlur(kernel_size=(9, 9), sigma=(0.1, 2.0)),
+                transforms.Resize((patch_h * 14, patch_w * 14)),
+                # v2.CenterCrop((patch_h * 14, patch_w * 14)),
+                transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            ])
+            qpos += (self.qpos_noise_std ** 0.5) * torch.randn_like(qpos)
+        else:  # inference time
+            transform = transforms.Compose([
+                transforms.Resize((patch_h * 14, patch_w * 14)),
+                # v2.CenterCrop((patch_h * 14, patch_w * 14)),
+                transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+            ])
+
+        image = transform(image)
 
         if actions is not None:  # 训练模式
             actions = actions[:, :self.model.num_queries]  # 裁剪动作序列

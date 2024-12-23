@@ -4,9 +4,9 @@ import os
 ### Task parameters
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 
-# DATA_DIR = 'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_model'
-DATA_DIR = r"/home/zhnh/Documents/project"
-HDF5_DIR = DATA_DIR + r'/save_dir_hdf5_12_20'
+DATA_DIR = 'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_model'
+# DATA_DIR = r'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_file'
+HDF5_DIR = DATA_DIR + r'\save_dir'
 SIM_TASK_CONFIGS = {
     'sim_transfer_cube_scripted': {
         'dataset_dir': DATA_DIR,
@@ -66,7 +66,7 @@ RIGHT_ARM_TASK_CONFIGS = {
         'task_name': 'right_arm_train',
         'batch_size': 16,
         'seed': 0,
-        'num_steps': 1000,
+        'num_steps': 10000,
         'lr': 2e-5,
         'num_episodes': None,
         'episode_len': 400,
@@ -81,6 +81,8 @@ RIGHT_ARM_TASK_CONFIGS = {
         'load_pretrain': False,
         'resume_ckpt_path': DATA_DIR + 'policy_best.ckpt',
         'loss_save_every': 500,
+        'eval':False,
+        'backbone':'dino_v2',
     },
     'train_test': {
         'dataset_dir': HDF5_DIR,

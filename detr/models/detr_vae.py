@@ -207,7 +207,7 @@ class DETRVAE(nn.Module):
             all_cam_pos = []
             for cam_id, cam_name in enumerate(self.camera_names):
                 # features, pos = self.backbones[cam_id](image[:, cam_id])
-                features, pos = self.backbones[cam_id](image[:, cam_id])
+                features, pos = self.backbones[0](image[:, cam_id])
 
                 features = features[0]  # 使用最后一层特征
                 pos = pos[0]
@@ -332,10 +332,12 @@ def build(args):
 
     # 初始化一个列表来存储每个相机的 backbone（特征提取网络）
     backbones = []
-    for _ in args.camera_names:  # 针对每个相机名称
-        # 为每个相机构建一个 backbone（特征提取网络）
-        backbone = build_backbone(args)
-        backbones.append(backbone)
+    backbone = build_backbone(args)
+    backbones.append(backbone)
+    # for _ in args.camera_names:  # 针对每个相机名称
+    #     # 为每个相机构建一个 backbone（特征提取网络）
+    #     backbone = build_backbone(args)
+    #     backbones.append(backbone)
 
     # 构建 transformer 模型
     transformer = build_transformer(args)

@@ -203,10 +203,12 @@ class ACTPolicy(nn.Module):
         model, optimizer = build_ACT_model_and_optimizer(args_override)  # 调用辅助函数构建模型和优化器
         self.model = model  # CVAE 解码器部分
         self.optimizer = optimizer  # 优化器
+        self.args_override = args_override
         if args_override['eval'] == False:
             self.kl_weight = args_override['kl_weight']  # KL 散度权重
             self.vq = args_override['vq']  # 是否启用 VQ（Vector Quantization）
             self.amplitude_weight = 0.1
+            self.qpos_noise_std = args_override['qpos_noise_std']
         # print(f'KL Weight {self.kl_weight}')
 
     def __call__(self, qpos, image, actions=None, is_pad=None, vq_sample=None):
@@ -225,8 +227,38 @@ class ACTPolicy(nn.Module):
         - 推理模式: 预测动作。
         """
         env_state = None
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        image = normalize(image)  # 归一化图像输入
+        # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        # image = normalize(image)  # 归一化图像输入
+        patch_h = 16
+        patch_w = 22
+        if self.args_override['backbone'] == 'dino_v2':
+            if actions is not None:  # training time
+                transform = transforms.Compose([
+                    # v2.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
+                    # v2.RandomPerspective(distortion_scale=0.5),
+                    # v2.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+                    # v2.GaussianBlur(kernel_size=(9, 9), sigma=(0.1, 2.0)),
+                    transforms.Resize((patch_h * 14, patch_w * 14)),
+                    # v2.CenterCrop((patch_h * 14, patch_w * 14)),
+                    transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                ])
+                qpos += (self.qpos_noise_std ** 0.5) * torch.randn_like(qpos)
+            else:  # inference time
+                transform = transforms.Compose([
+                    transforms.Resize((patch_h * 14, patch_w * 14)),
+                    # v2.CenterCrop((patch_h * 14, patch_w * 14)),
+                    transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+                ])
+
+            # 调整输入图像的形状
+            batch_size, num_cam, channel, height, width = image.shape
+            image = image.view(-1, channel, height, width)  # 合并 batch 和 camera
+            image = transform(image)  # 应用变换
+            image = image.view(batch_size, num_cam, channel, patch_h * 14, patch_w * 14)  # 恢复形状
+        else:
+            normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            image = normalize(image)  # 归一化图像输入
+
 
         if actions is not None:  # 训练模式
             actions = actions[:, :self.model.num_queries]  # 裁剪动作序列
@@ -254,8 +286,8 @@ class ACTPolicy(nn.Module):
             loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
 
             # 计算动作幅度奖励
-            action_amplitude_reward = torch.mean(torch.abs(a_hat))
-            loss_dict['amplitude_reward'] = -self.amplitude_weight * action_amplitude_reward
+            # action_amplitude_reward = torch.mean(torch.abs(a_hat))
+            # loss_dict['amplitude_reward'] = -self.amplitude_weight * action_amplitude_reward
 
             # 调整 L1 损失
             weight = torch.abs(actions)
@@ -267,8 +299,8 @@ class ACTPolicy(nn.Module):
 
             # 动态调整权重
             # alpha = 0.5 * (1 + math.cos(step / max_steps * math.pi))
-            alpha = 0.5
-            loss_dict['loss'] = alpha * loss_dict['l1'] + loss_dict['kl'] * self.kl_weight + loss_dict['amplitude_reward']
+            # alpha = 0.5
+            loss_dict['loss'] =  loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
             return loss_dict
         else:  # 推理模式
             a_hat, _, (_, _), _, _ = self.model(qpos, image, env_state, vq_sample=vq_sample)  # 采样自先验

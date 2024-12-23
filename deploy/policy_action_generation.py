@@ -12,14 +12,9 @@ def get_env():
     robomimic_path = os.path.join(root_path, 'robomimic', 'robomimic')
     sys.path.append(str(robomimic_path))
 get_env()
-
 from utils import make_policy
-from constants import SIM_TASK_CONFIGS
-from detr.models.latent_model import Latent_Model_Transformer
-import os
 import torch
 import pickle
-import numpy as np
 import argparse
 from einops import rearrange
 import time
@@ -42,7 +37,7 @@ class ActionGenerator:
         self.policy_config = {
             # 'lr': args['lr'],
             'num_queries': args['chunk_size'],
-            'backbone': 'resnet18',
+            'backbone': args['backbone'],
             'enc_layers': 4,
             'dec_layers': 7,
             'nheads': 8,
@@ -66,7 +61,8 @@ class ActionGenerator:
         self.ckpt_dir = args['ckpt_dir']
         self.policy_class = args['policy_class']
         self.policy = self._load_policy()
-
+        self.qpos_list = None
+        self.image_dict = None
     def _load_policy(self):
         """
         加载策略模型。

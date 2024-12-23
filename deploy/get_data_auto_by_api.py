@@ -455,7 +455,7 @@ def main(rand_pos, indx, pipelines):
             joints_nums=7,
             episode_idx=indx,
             data_dict=data_dict,
-            reshape_hdf5_path='../save_dir_hdf5_12_20_'
+            reshape_hdf5_path='../save_dir_hdf5_12_23_noon'
         )
         # 确保监听器线程被正确关闭
         # listener_thread.join()
@@ -519,7 +519,7 @@ if __name__ == "__main__":
     # move_back(standard_final_pos)
     # time.sleep(1111)
 
-    for i in range(50):
+    for i in range(4):
         print(f"i:{i+1}")
         # print(posRecorder.real_right_arm.rm_get_tool_voltage())
         final = move_back(standard_final_pos)

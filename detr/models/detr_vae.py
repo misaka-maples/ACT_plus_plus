@@ -34,6 +34,134 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 
 class DETRVAE(nn.Module):
+    """ This is the DETR module that performs object detection """
+
+    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries,vq, vq_class, vq_dim, camera_names):
+        """ Initializes the model.
+        Parameters:
+            backbones: torch module of the backbone to be used. See backbone.py
+            transformer: torch module of the transformer architecture. See transformer.py
+            state_dim: robot state dimension of the environment
+            num_queries: number of object queries, ie detection slot. This is the maximal number of objects
+                         DETR can detect in a single image. For COCO, we recommend 100 queries.
+            aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
+        """
+        super().__init__()
+        self.num_queries = num_queries
+        self.camera_names = camera_names
+        self.transformer = transformer
+        self.encoder = encoder
+        self.vq, self.vq_class, self.vq_dim = vq, vq_class, vq_dim  # VQ 参数
+        hidden_dim = transformer.d_model
+        self.action_head = nn.Linear(hidden_dim, action_dim)
+        self.is_pad_head = nn.Linear(hidden_dim, 1)
+        self.query_embed = nn.Embedding(num_queries, hidden_dim)
+        if backbones is not None:
+            self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
+            self.backbones = nn.ModuleList(backbones)
+            self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
+        else:
+            # raise NotImplementedError
+            # input_dim = 14 + 7 # robot_state + env_state
+            self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
+            self.input_proj_env_state = nn.Linear(7, hidden_dim)
+            self.pos = torch.nn.Embedding(2, hidden_dim)
+            self.backbones = None
+
+        # encoder extra parameters
+        self.latent_dim = 32  # final size of latent z # TODO tune
+        self.cls_embed = nn.Embedding(1, hidden_dim)  # extra cls token embedding
+        self.encoder_action_proj = nn.Linear(action_dim, hidden_dim)  # project action to embedding
+        self.encoder_joint_proj = nn.Linear(state_dim, hidden_dim)  # project qpos to embedding
+        self.latent_proj = nn.Linear(hidden_dim, self.latent_dim * 2)  # project hidden state to latent std, var
+        self.register_buffer('pos_table', get_sinusoid_encoding_table(1 + 1 + num_queries, hidden_dim))  # [CLS], qpos, a_seq
+
+        # decoder extra parameters
+        self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim)  # project latent sample to embedding
+        self.additional_pos_embed = nn.Embedding(2, hidden_dim)  # learned position embedding for proprio and latent
+
+    def forward(self, qpos, image, env_state, actions=None, is_pad=None, vq_sample=None):
+        """
+        qpos: batch, qpos_dim
+        image: batch, num_cam, channel, height, width
+        env_state: None
+        actions: batch, seq, action_dim
+        """
+        is_training = actions is not None  # train or val
+        bs, _ = qpos.shape
+        ### Obtain latent z from action sequence
+        if is_training:
+            # project action sequence to embedding dim, and concat with a CLS token
+            action_embed = self.encoder_action_proj(actions)  # (bs, seq, hidden_dim)
+            qpos_embed = self.encoder_joint_proj(qpos)  # (bs, hidden_dim)
+            qpos_embed = torch.unsqueeze(qpos_embed, axis=1)  # (bs, 1, hidden_dim)
+            cls_embed = self.cls_embed.weight  # (1, hidden_dim)
+            cls_embed = torch.unsqueeze(cls_embed, axis=0).repeat(bs, 1, 1)  # (bs, 1, hidden_dim)
+            encoder_input = torch.cat([cls_embed, qpos_embed, action_embed], axis=1)  # (bs, seq+1, hidden_dim)
+            encoder_input = encoder_input.permute(1, 0, 2)  # (seq+1, bs, hidden_dim)
+            # do not mask cls token
+            cls_joint_is_pad = torch.full((bs, 2), False).to(qpos.device)  # False: not a padding
+            is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)  # (bs, seq+1)
+            # obtain position embedding
+            pos_embed = self.pos_table.clone().detach()
+            pos_embed = pos_embed.permute(1, 0, 2)  # (seq+1, 1, hidden_dim)
+            # query model
+            encoder_output = self.encoder(encoder_input, pos=pos_embed, src_key_padding_mask=is_pad)
+            encoder_output = encoder_output[0]  # take cls output only
+            latent_info = self.latent_proj(encoder_output)
+            probs = binaries = None
+            mu = latent_info[:, :self.latent_dim]
+            logvar = latent_info[:, self.latent_dim:]
+            latent_sample = reparametrize(mu, logvar)
+            latent_input = self.latent_out_proj(latent_sample)
+        else:
+            probs = binaries = mu = logvar = None
+            latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(qpos.device)
+            latent_input = self.latent_out_proj(latent_sample)
+
+        if self.backbones is not None:
+            # Image observation features and position embeddings
+            all_cam_features = []
+            all_cam_pos = []
+            # featuress, poss = self.backbones[0](image.flatten(0, 1))  # HARDCODED
+            # featuress = featuress[0].view(image.shape[0], 2, 384, 16, 22)  # take the last layer feature
+            # pos = poss[0]
+            # for cam_id, cam_name in enumerate(self.camera_names):
+            #     # start = time.time()
+            #     # import ipdb; ipdb.set_trace()
+            #     features = featuress[:, cam_id]  # HARDCODED
+            #     # features, pos = self.backbones[cam_id](image[:, cam_id]) # HARDCODED
+            #     # print("Time for 1 backbone: ", time.time() - start, image.shape)
+            #     # features = features[0] # take the last layer feature
+            #     # pos = pos[0]
+            #     all_cam_features.append(self.input_proj(features))
+            #     all_cam_pos.append(pos / 2 + cam_id - 0.5)
+            #     # break
+
+            for cam_id, cam_name in enumerate(self.camera_names):
+                features, pos = self.backbones[0](image[:, cam_id]) # HARDCODED
+                features = features[0] # take the last layer feature
+                pos = pos[0]
+                all_cam_features.append(self.input_proj(features))
+                all_cam_pos.append(pos)
+
+            # proprioception features
+            proprio_input = self.input_proj_robot_state(qpos)
+            # fold camera dimension into width dimension
+            src = torch.cat(all_cam_features, axis=3)
+            pos = torch.cat(all_cam_pos, axis=3)
+            hs = self.transformer(src, None, self.query_embed.weight, pos, latent_input, proprio_input, self.additional_pos_embed.weight)[0]
+        else:
+            # raise NotImplementedError
+            qpos = self.input_proj_robot_state(qpos)
+            env_state = self.input_proj_env_state(env_state)
+            transformer_input = torch.cat([qpos, env_state], axis=1)  # seq length = 2
+            hs = self.transformer(transformer_input, None, self.query_embed.weight, self.pos.weight)[0]
+        a_hat = self.action_head(hs)
+        is_pad_hat = self.is_pad_head(hs)
+        return a_hat, is_pad_hat, [mu, logvar], probs, binaries
+
+class DETR_VAE(nn.Module):
     """ DETR 模块，带有变分自编码器 (VAE) 架构，用于目标检测 """
 
     def __init__(self, backbones, transformer, encoder, state_dim, num_queries, camera_names, vq, vq_class, vq_dim, action_dim):
@@ -73,16 +201,7 @@ class DETRVAE(nn.Module):
         # 如果有骨干网络（用于处理图像输入）
         if backbones is not None:
             # 将骨干网络的输出通道数投影到 Transformer 的隐藏维度
-            # self.input_proj = nn.Conv2d(backbones[0].num_channels, 384, kernel_size=1)
-            # print(backbones[0].num_channels)
-            self.input_proj = nn.ModuleList([
-                nn.Conv2d(512, 512, kernel_size=1) for backbone in backbones
-            ])
-            # 在 detr_vae.py 的模型初始化部分
-            # self.input_proj = nn.ModuleList([
-            #     nn.Conv2d(512, 384, kernel_size=1) for _ in range(num_cameras)
-            # ])
-
+            self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
             self.backbones = nn.ModuleList(backbones)  # 保存多个骨干网络
             # 将机器人状态映射到 Transformer 的隐藏维度
             self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
@@ -92,8 +211,6 @@ class DETRVAE(nn.Module):
             self.input_proj_env_state = nn.Linear(7, hidden_dim)  # 环境状态映射
             self.pos = torch.nn.Embedding(2, hidden_dim)  # 位置编码（仅用于状态）
             self.backbones = None
-        for i, backbone in enumerate(self.backbones):
-            print(f"Backbone {i}: Expected output channels = {backbone.num_channels}")
 
         # 编码器额外参数
         self.latent_dim = 32  # 潜在空间的维度（可调节）
@@ -216,20 +333,14 @@ class DETRVAE(nn.Module):
             # 处理每个相机的图像特征和位置编码
             all_cam_features = []
             all_cam_pos = []
-
             for cam_id, cam_name in enumerate(self.camera_names):
                 # features, pos = self.backbones[cam_id](image[:, cam_id])
-                features, pos = self.backbones[cam_id](image[:, cam_id])
-
+                features, pos = self.backbones[0](image[:, cam_id])
 
                 features = features[0]  # 使用最后一层特征
-                # print(features.shape)
                 pos = pos[0]
-                features_proj = self.input_proj[cam_id](features)  # 投影到统一通道数
-                # all_cam_features.append(self.input_proj(features))
-                all_cam_features.append(features_proj)
+                all_cam_features.append(self.input_proj(features))
                 all_cam_pos.append(pos)
-
             # 处理机器人状态特征
             proprio_input = self.input_proj_robot_state(qpos)
             # 将所有相机特征合并
@@ -349,20 +460,22 @@ def build(args):
 
     # 初始化一个列表来存储每个相机的 backbone（特征提取网络）
     backbones = []
-    for _ in args.camera_names:  # 针对每个相机名称
-        # 为每个相机构建一个 backbone（特征提取网络）
-        backbone = build_backbone(args)
-        backbones.append(backbone)
+    backbone = build_backbone(args)
+    backbones.append(backbone)
+    # for _ in args.camera_names:  # 针对每个相机名称
+    #     # 为每个相机构建一个 backbone（特征提取网络）
+    #     backbone = build_backbone(args)
+    #     backbones.append(backbone)
 
     # 构建 transformer 模型
     transformer = build_transformer(args)
-
+    encoder = build_encoder(args)
     # 根据 `args.no_encoder` 的值来决定是否构建编码器（encoder）
-    if args.no_encoder:
-        encoder = None  # 如果不需要编码器，设置为 None
-    else:
-        # 如果需要编码器，调用 `build_encoder` 来构建
-        encoder = build_encoder(args)
+    # if args.no_encoder:
+    #     encoder = None  # 如果不需要编码器，设置为 None
+    # else:
+    #     # 如果需要编码器，调用 `build_encoder` 来构建
+    #     encoder = build_transformer(args)
 
     # 创建 DETRVAE 模型，并将所有组件传入
     model = DETRVAE(

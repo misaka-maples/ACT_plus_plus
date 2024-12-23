@@ -1,7 +1,10 @@
 from datetime import datetime
 import os, datetime, sys
 import argparse
-from Robotic_Arm.rm_robot_interface import RoboticArm
+
+from networkx.readwrite.json_graph.tree import tree_data
+from triton.language.semantic import store
+
 # from deploy.rem_test import current_time
 from hdf5_edit import get_state
 from policy_action_generation import ActionGenerator
@@ -14,7 +17,6 @@ from tqdm import tqdm
 from visualize_episodes import visualize_joints
 from constants import HDF5_DIR, DATA_DIR
 from hdf5_edit import get_image_from_folder, get_top_right_image
-from Robotic_Arm.rm_robot_interface import *
 current_time = datetime.datetime.now()
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 STATE_NAMES = JOINT_NAMES + ["gripper"]
@@ -32,7 +34,7 @@ class QposRecorder:
         return_action = self.joint_state_right[1]['joint']
         # print(return_action)
         return return_action
-posRecorder = QposRecorder()
+
 def rand_action():
     qpos_list = np.random.randn(1, 7)  # 100 个状态
     # 生成一个包含每个相机名称的图像字典
@@ -50,7 +52,7 @@ def rand_action():
 camera_names = ['top', 'right_wrist']
 def main(args):
     camera_top_data, camera_right_data, qpos_list, action_ = get_state(
-        '/home/zhnh/Documents/project/save_dir_hdf5_12_20/episode_38.hdf5')
+        r'/home/zhnh/Documents/project/act_arm_project/hdf5_files/save_dir/save_dir_hdf5_12_20/episode_1.hdf5')
     # actions_list = []
     # qpos_list = []
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
@@ -64,11 +66,15 @@ def main(args):
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': r'/home/zhnh/Documents/project',
+        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/hdf5_files',
         'policy_class': 'ACT',
         'chunk_size': 210,
+        'backbone': 'dino_v2',
     }
     ActionGeneration = ActionGenerator(config)
+    if args['joint_true'] is True:
+        from Robotic_Arm.rm_robot_interface import RoboticArm
+        posRecorder = QposRecorder()
 
     for i in tqdm(range(loop_len)):
         # print(f"roll:{i}")
@@ -76,13 +82,11 @@ def main(args):
             'top': camera_top_data[i],
             'right_wrist': camera_right_data[i],
         }
-        # image_dict = {
-        #     'top': top__[i],
-        #     'right_wrist': right__[i],
-        # }
         # print(image_dict)
-        qpos = qpos_list[i]
-        # qpos = posRecorder.get_state()
+        if args['joint_true'] is True:
+            qpos = posRecorder.get_state()
+        else:
+            qpos = qpos_list[i]
         radius_qpos = [math.radians(j) for j in qpos]
         ActionGeneration.image_dict = image_dict
         ActionGeneration.qpos_list = radius_qpos
@@ -91,14 +95,14 @@ def main(args):
         # actions=qpos
         actions_list.append(actions)
         loss.append((actions - action_[i]) ** 2)
-        power = actions[6]
-        # print(power)
-        # if power > 2.7:
-        #     posRecorder.real_right_arm.rm_set_tool_voltage(3)
-        # else:
-        #     posRecorder.real_right_arm.rm_set_tool_voltage(0)
-        # actions = [i * 180.0 / math.pi for i in actions[:6]]
-        # posRecorder.real_right_arm.rm_movej(actions, 50, 0, 0, 1)
+        if args['joint_true'] is True:
+            power = actions[6]
+            if power > 2.7:
+                posRecorder.real_right_arm.rm_set_tool_voltage(3)
+            else:
+                posRecorder.real_right_arm.rm_set_tool_voltage(0)
+            actions = [i * 180.0 / math.pi for i in actions[:6]]
+            posRecorder.real_right_arm.rm_movej(actions, 50, 0, 0, 1)
 
     path_save_image = os.path.join(os.getcwd(), "deploy_image")
     if os.path.exists(path_save_image) is False:
@@ -118,6 +122,6 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--folder_get_image', default=False, type=float)
-    # parser.add_argument('--folder_episode_idx', default=False, type=float)
+    parser.add_argument('--joint_true', default=False, required=False, action='store_true')
 
     a = main(vars(parser.parse_args()))

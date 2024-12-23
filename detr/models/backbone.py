@@ -68,10 +68,8 @@ class BackboneBase(nn.Module):
         #     if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
         #         parameter.requires_grad_(False)
         if return_interm_layers:
-            if isinstance(backbone, DINOv2BackBone):
-                return_layers = {"0": "0"}  # 根据 DINOv2BackBone 的输出定义
-            else:
-                return_layers = {"layer1": "0", "layer2": "1.md", "layer3": "2", "layer4": "3"}
+
+            return_layers = {"layer1": "0", "layer2": "1.md", "layer3": "2", "layer4": "3"}
         else:
             return_layers = {'layer4': "0"}
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
@@ -91,15 +89,16 @@ class BackboneBase(nn.Module):
 
 class Backbone(BackboneBase):
     """ResNet backbone with frozen BatchNorm."""
+
     def __init__(self, name: str,
                  train_backbone: bool,
                  return_interm_layers: bool,
                  dilation: bool):
-        weights = get_model_weights(name).DEFAULT
         backbone = getattr(torchvision.models, name)(
             replace_stride_with_dilation=[False, False, dilation],
-            weights=weights, norm_layer=FrozenBatchNorm2d) # pretrained # TODO do we want frozen batch_norm??
-        num_channels = 384 if name in ('resnet18', 'resnet34','dino_v2') else 2048
+            pretrained=is_main_process(),
+            norm_layer=FrozenBatchNorm2d)  # pretrained # TODO do we want frozen batch_norm??
+        num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
         super().__init__(backbone, train_backbone, num_channels, return_interm_layers)
 
 def pad_image(image, patch_size=14):
@@ -122,54 +121,15 @@ def pad_image(image, patch_size=14):
 class DINOv2BackBone(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.body = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14',pretrained=True)
+        self.body = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
         self.body.eval()
         self.num_channels = 384
 
-    # @torch.no_grad()   原程序-DINOv2
-    # def forward(self, tensor):
-    #     # tensor = pad_image(tensor)
-    #     xs = self.body.forward_features(tensor)["x_norm_patchtokens"]
-    #     print(f"features.shape: {xs.shape}")
-    #     od = OrderedDict()
-    #     od["0"] = xs.reshape(xs.shape[0], 22, 16, 384).permute(0, 3, 2, 1)
-    #     return od
-
-
     @torch.no_grad()
     def forward(self, tensor):
-        # 对图像进行填充，确保尺寸为补丁大小的整数倍
-        tensor = pad_image(tensor, patch_size=14)
-
-        # 获取特征
-        features = self.body.forward_features(tensor)["x_norm_patchtokens"]
-        print(f"features.shape: {features.shape}")  # 例如 [16, 1201, 384]
-
-        batch_size, seq_len, dim = features.shape
-        num_patches = seq_len - 1  # 假设第一个 token 是 class token
-
-        # 根据填充后的图像计算 grid_size
-        grid_size_h = tensor.shape[2] // 14  # 填充后的高度
-        grid_size_w = tensor.shape[3] // 14  # 填充后的宽度
-        expected_num_patches = grid_size_h * grid_size_w  # 例如 34 * 45 = 1530
-
-        if num_patches != expected_num_patches:
-            print(f"num_patches {num_patches} 不符合预期 {expected_num_patches}。正在调整。")
-            # 剪裁多余的补丁
-            if num_patches > expected_num_patches:
-                features = features[:, :expected_num_patches + 1, :]  # 保留 class token
-                num_patches = expected_num_patches
-            elif num_patches < expected_num_patches:
-                # 用零填充缺失的补丁
-                pad_size = expected_num_patches - num_patches
-                padding = torch.zeros(batch_size, pad_size, dim, device=tensor.device)
-                features = torch.cat([features, padding], dim=1)
-                num_patches = expected_num_patches
-
-        patches = features[:, 1:, :].reshape(batch_size, grid_size_h, grid_size_w, dim)
-        patches = patches.permute(0, 3, 1, 2)  # [batch_size, dim, grid_size_h, grid_size_w]
+        xs = self.body.forward_features(tensor)["x_norm_patchtokens"]
         od = OrderedDict()
-        od["0"] = patches
+        od["0"] = xs.reshape(xs.shape[0], 22, 16, 384).permute(0, 3, 2, 1)
         return od
 
 class Joiner(nn.Sequential):
@@ -195,9 +155,10 @@ def build_backbone(args):
     if args.backbone == 'dino_v2':
         backbone = DINOv2BackBone()
     else:
-        assert args.backbone in ['resnet18', 'resnet34'], f"Unsupported backbone: {args.backbone}"
+        assert args.backbone in ['resnet18', 'resnet34']
         backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels
     return model
+
  

@@ -3,16 +3,12 @@ import random
 
 import matplotlib.pyplot as plt
 
-from constants import HDF5_DIR, DATA_DIR
 import h5py
 import cv2
 import os
 import fnmatch
 import numpy as np
-from constants import RIGHT_ARM_TASK_CONFIGS
-from constants import HDF5_DIR
-import visualize_episodes
-# from ..test import save_hdf5_content
+from constants import RIGHT_ARM_TASK_CONFIGS, HDF5_DIR, DATA_DIR
 camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
 max_timesteps = 0
 

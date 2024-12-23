@@ -184,6 +184,7 @@ def main():
         'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/models/auto_1_12-21',
         'policy_class': 'ACT',
         'chunk_size': 210,
+        'backbone': 'dino_v2',
     }
     ActionGenerator1= ActionGenerator(config)
     global stop_processing

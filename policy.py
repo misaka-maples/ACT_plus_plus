@@ -203,6 +203,7 @@ class ACTPolicy(nn.Module):
         model, optimizer = build_ACT_model_and_optimizer(args_override)  # 调用辅助函数构建模型和优化器
         self.model = model  # CVAE 解码器部分
         self.optimizer = optimizer  # 优化器
+        self.args_override = args_override
         if args_override['eval'] == False:
             self.kl_weight = args_override['kl_weight']  # KL 散度权重
             self.vq = args_override['vq']  # 是否启用 VQ（Vector Quantization）
@@ -230,31 +231,33 @@ class ACTPolicy(nn.Module):
         # image = normalize(image)  # 归一化图像输入
         patch_h = 16
         patch_w = 22
+        if self.args_override['backbone'] == 'dino_v2':
+            if actions is not None:  # training time
+                transform = transforms.Compose([
+                    # v2.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
+                    # v2.RandomPerspective(distortion_scale=0.5),
+                    # v2.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+                    # v2.GaussianBlur(kernel_size=(9, 9), sigma=(0.1, 2.0)),
+                    transforms.Resize((patch_h * 14, patch_w * 14)),
+                    # v2.CenterCrop((patch_h * 14, patch_w * 14)),
+                    transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                ])
+                qpos += (self.qpos_noise_std ** 0.5) * torch.randn_like(qpos)
+            else:  # inference time
+                transform = transforms.Compose([
+                    transforms.Resize((patch_h * 14, patch_w * 14)),
+                    # v2.CenterCrop((patch_h * 14, patch_w * 14)),
+                    transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+                ])
 
-        if actions is not None:  # training time
-
-            transform = transforms.Compose([
-                # v2.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
-                # v2.RandomPerspective(distortion_scale=0.5),
-                # v2.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
-                # v2.GaussianBlur(kernel_size=(9, 9), sigma=(0.1, 2.0)),
-                transforms.Resize((patch_h * 14, patch_w * 14)),
-                # v2.CenterCrop((patch_h * 14, patch_w * 14)),
-                transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-            ])
-            qpos += (self.qpos_noise_std ** 0.5) * torch.randn_like(qpos)
-        else:  # inference time
-            transform = transforms.Compose([
-                transforms.Resize((patch_h * 14, patch_w * 14)),
-                # v2.CenterCrop((patch_h * 14, patch_w * 14)),
-                transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
-            ])
-
-        # 调整输入图像的形状
-        batch_size, num_cam, channel, height, width = image.shape
-        image = image.view(-1, channel, height, width)  # 合并 batch 和 camera
-        image = transform(image)  # 应用变换
-        image = image.view(batch_size, num_cam, channel, patch_h * 14, patch_w * 14)  # 恢复形状
+            # 调整输入图像的形状
+            batch_size, num_cam, channel, height, width = image.shape
+            image = image.view(-1, channel, height, width)  # 合并 batch 和 camera
+            image = transform(image)  # 应用变换
+            image = image.view(batch_size, num_cam, channel, patch_h * 14, patch_w * 14)  # 恢复形状
+        else:
+            normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            image = normalize(image)  # 归一化图像输入
 
 
         if actions is not None:  # 训练模式

@@ -490,7 +490,7 @@ if __name__ == '__main__':
     # modify_hdf5(DATA_DIR + '\\reshape_hdf5\\episode_0.hdf5', compress=True)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
-    save_video(r'/home/zhnh/Documents/project/save_dir_hdf5_12_20', fps=30, i=0)
+    save_video(r'/home/zhnh/Documents/project/act_arm_project/hdf5_files/save_dir/save_dir_hdf5_12_20/', fps=30, i=20)
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀

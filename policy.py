@@ -234,10 +234,10 @@ class ACTPolicy(nn.Module):
         if self.args_override['backbone'] == 'dino_v2':
             if actions is not None:  # training time
                 transform = transforms.Compose([
-                    # v2.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
-                    # v2.RandomPerspective(distortion_scale=0.5),
-                    # v2.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
-                    # v2.GaussianBlur(kernel_size=(9, 9), sigma=(0.1, 2.0)),
+                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
+                    transforms.RandomPerspective(distortion_scale=0.5),
+                    transforms.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+                    transforms.GaussianBlur(kernel_size=(9, 9), sigma=(0.1, 2.0)),
                     transforms.Resize((patch_h * 14, patch_w * 14)),
                     # v2.CenterCrop((patch_h * 14, patch_w * 14)),
                     transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
@@ -296,10 +296,6 @@ class ACTPolicy(nn.Module):
 
             loss_dict['l1'] = l1
             loss_dict['kl'] = total_kld[0]
-
-            # 动态调整权重
-            # alpha = 0.5 * (1 + math.cos(step / max_steps * math.pi))
-            # alpha = 0.5
             loss_dict['loss'] =  loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
             return loss_dict
         else:  # 推理模式

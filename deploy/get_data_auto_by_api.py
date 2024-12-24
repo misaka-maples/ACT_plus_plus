@@ -324,6 +324,9 @@ def move_j(rand_pos):
     posRecorder.real_right_arm.rm_set_tool_voltage(3)
 
     queue_action=[original_pos, final_pos, rand_pos]
+    temp_ = queue_action[2].copy()
+    temp_[1] = temp_[1] - 0.1
+    posRecorder.real_right_arm.rm_movej_p(temp_, 14, 0, 1, 0)
     posRecorder.real_right_arm.rm_movej_p(queue_action[2], 14, 0, 1, 0)
     temp_ = queue_action[2].copy()
     temp_[1] = temp_[1]-0.1
@@ -455,7 +458,7 @@ def main(rand_pos, indx, pipelines):
             joints_nums=7,
             episode_idx=indx,
             data_dict=data_dict,
-            reshape_hdf5_path='../save_dir_hdf5_12_23_noon'
+            reshape_hdf5_path='../save_dir_hdf5_12_24_mor'
         )
         # 确保监听器线程被正确关闭
         # listener_thread.join()
@@ -519,7 +522,7 @@ if __name__ == "__main__":
     # move_back(standard_final_pos)
     # time.sleep(1111)
 
-    for i in range(4):
+    for i in range(9):
         print(f"i:{i+1}")
         # print(posRecorder.real_right_arm.rm_get_tool_voltage())
         final = move_back(standard_final_pos)

@@ -47,7 +47,7 @@ from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
 from detr.models.latent_model import Latent_Model_Transformer
 from sim_env import BOX_POSE
 import os
-os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
+# os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
 # settings = wandb.Set tings(
 #     moitor_=False,       # 禁用 GPU 监控
 #     monitor_cpu=False,        # 禁用 CPU 监控
@@ -103,7 +103,7 @@ def main(args):
     camera_names = task_config['camera_names']
     stats_dir = task_config.get('stats_dir', None)
     sample_weights = task_config.get('sample_weights', None)
-    train_ratio = task_config.get('train_ratio', 0.99)
+    train_ratio = task_config.get('train_ratio', 0.9)
     name_filter = task_config.get('name_filter', lambda n: True)
 
     # fixed parameters

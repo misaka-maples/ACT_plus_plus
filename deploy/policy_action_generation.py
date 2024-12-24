@@ -1,17 +1,20 @@
-import os,sys
+import os, sys
 from pathlib import Path
-def get_env():
-    root_path = Path(__file__).resolve().parent.parent
-    sys.path.append(str(root_path))
-    # print(root_path)
 
-    detr_path = os.path.join(root_path, 'detr')
-    sys.path.append(str(detr_path))
-    # print(detr_path)
-
-    robomimic_path = os.path.join(root_path, 'robomimic', 'robomimic')
-    sys.path.append(str(robomimic_path))
-get_env()
+# def get_env():
+#     root_path = Path(__file__).resolve().parent.parent
+#     sys.path.append(str(root_path))
+#     # print(root_path)
+#
+#     detr_path = os.path.join(root_path, 'detr')
+#     sys.path.append(str(detr_path))
+#     # print(detr_path)
+#
+#     robomimic_path = os.path.join(root_path, 'robomimic', 'robomimic')
+#     sys.path.append(str(robomimic_path))
+#
+#
+# get_env()
 from utils import make_policy
 import torch
 import pickle
@@ -47,14 +50,14 @@ class ActionGenerator:
             'action_dim': 9,
             # 'no_encoder': args['no_encoder'],
             'state_dim': 7,
-            "eval":args['eval']
+            "eval": args['eval']
         }
         self.config = {
             'ckpt_dir': args['ckpt_dir'],
             'policy_class': args['policy_class'],
             'policy_config': self.policy_config,
             'episode_len': 400,
-            'temporal_agg': False,
+            'temporal_agg': args['temporal_agg'],
             'state_dim': 7,
         }
         # 载入策略模型
@@ -63,6 +66,12 @@ class ActionGenerator:
         self.policy = self._load_policy()
         self.qpos_list = None
         self.image_dict = None
+        self.temporal_agg = self.config['temporal_agg']
+        self.num_queries = args['chunk_size']
+        self.max_timesteps = args['max_timesteps']
+        self.t = None
+        self.all_time_actions = None
+        self.query_frequency = args['chunk_size']
     def _load_policy(self):
         """
         加载策略模型。
@@ -70,7 +79,7 @@ class ActionGenerator:
         返回：
         - policy: 加载后的策略模型。
         """
-        ckpt_path = os.path.join(self.ckpt_dir, 'policy_best.ckpt')
+        ckpt_path = os.path.join(self.ckpt_dir, 'policy_step_1500_seed_0.ckpt')
         policy = make_policy(self.policy_class, self.policy_config)
         policy.deserialize(torch.load(ckpt_path, weights_only=True))
         policy.cuda()
@@ -122,11 +131,25 @@ class ActionGenerator:
 
         # 获取图像并转换格式
         curr_image = self._get_image(ts=None, image_dict=image_dict)
-
+        if self.temporal_agg:
+            self.all_time_actions = torch.zeros([self.max_timesteps, self.max_timesteps + self.num_queries, self.policy_config['action_dim']]).cuda()
+            self.query_frequency=1
         # 查询策略模型
         if self.policy_class == "ACT":
             all_actions = self.policy(qpos, curr_image)
-            raw_action = all_actions[:, 0]  # 单步数据不涉及时间步索引
+            if self.temporal_agg:
+                self.all_time_actions[[self.t], self.t:self.t + self.num_queries] = all_actions
+                actions_for_curr_step = self.all_time_actions[:, self.t]
+                actions_populated = torch.all(actions_for_curr_step != 0, axis=1)
+                actions_for_curr_step = actions_for_curr_step[actions_populated]
+                k = 0.01
+                exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
+                exp_weights = exp_weights / exp_weights.sum()
+                exp_weights = torch.from_numpy(exp_weights).cuda().unsqueeze(dim=1)
+                raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True)
+            else:
+                raw_action = all_actions[:, self.t % self.query_frequency]
+            # raw_action = all_actions[:, 0]
         else:
             raise NotImplementedError
 
@@ -178,7 +201,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr', action='store', type=float, help='lr', required=False)
     parser.add_argument('--load_pretrain', action='store_true', default=False)
     parser.add_argument('--eval_every', action='store', type=int, default=500, help='eval_every', required=False)
-    parser.add_argument('--validate_every', action='store', type=int, default=500, help='validate_every', required=False)
+    parser.add_argument('--validate_every', action='store', type=int, default=500, help='validate_every',
+                        required=False)
     parser.add_argument('--save_every', action='store', type=int, default=500, help='save_every', required=False)
     parser.add_argument('--resume_ckpt_path', action='store', type=str, help='resume_ckpt_path', required=False)
     parser.add_argument('--skip_mirrored_data', action='store_true')
@@ -193,7 +217,7 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_dim', action='store', type=int, default=512, help='hidden_dim', required=False)
     parser.add_argument('--dim_feedforward', action='store', type=int, help='dim_feedforward', required=False)
     parser.add_argument('--temporal_agg', action='store_true')
-    parser.add_argument('--use_vq', action='store_true',default=False)
+    parser.add_argument('--use_vq', action='store_true', default=False)
     parser.add_argument('--vq_class', action='store', type=int, help='vq_class')
     parser.add_argument('--vq_dim', action='store', type=int, help='vq_dim')
     parser.add_argument('--no_encoder', action='store_true')

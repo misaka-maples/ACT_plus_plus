@@ -19,6 +19,7 @@ from detr.util.misc import NestedTensor, is_main_process
 from .position_encoding import build_position_encoding
 
 import IPython
+import os
 e = IPython.embed
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -121,9 +122,16 @@ def pad_image(image, patch_size=14):
 class DINOv2BackBone(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.body = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+        path = '/home/zhnh/Documents/project/act_arm_project/detr/dino_v2'
+        os.makedirs(path, exist_ok=True)
+
+        # 设置本地缓存目录
+        torch.hub.set_dir(path)
+        self.body = torch.hub.load('/home/zhnh/Documents/project/act_arm_project/detr/dino_v2/facebookresearch_dinov2_main', 'dinov2_vits14',source='local')
         self.body.eval()
         self.num_channels = 384
+        # 如果你想把模型保存到本地文件
+        # torch.save(self.body.state_dict(), r'/home/zhnh/Documents/project/act_arm_project/detr/dino_v2')
 
     @torch.no_grad()
     def forward(self, tensor):

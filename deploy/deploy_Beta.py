@@ -15,7 +15,7 @@ import time
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from visualize_episodes import visualize_joints
-from constants import HDF5_DIR, DATA_DIR
+# from constants import HDF5_DIR, DATA_DIR
 from hdf5_edit import get_image_from_folder, get_top_right_image
 current_time = datetime.datetime.now()
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
@@ -52,14 +52,14 @@ def rand_action():
 camera_names = ['top', 'right_wrist']
 def main(args):
     camera_top_data, camera_right_data, qpos_list, action_ = get_state(
-        r'/home/zhnh/Documents/project/act_arm_project/hdf5_files/save_dir/save_dir_hdf5_12_20/episode_1.hdf5')
+        r'/home/zhnh/Documents/project/act_arm_project/hdf5_files/save_dir/save_dir_hdf5_12_20/episode_80.hdf5')
     # actions_list = []
     # qpos_list = []
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
     actions_list = []
     qpos_list_ = []
     loss = []
-    loop_len = len(camera_right_data)-100
+    loop_len = len(camera_right_data)
     if args['folder_get_image']:
         image_directory = r"D:\aloha\ACT_plus_plus\hdf5_file\04"  # 图像文件夹路径
         top_image, right_image = get_top_right_image(image_directory, '.jpg')
@@ -70,6 +70,8 @@ def main(args):
         'policy_class': 'ACT',
         'chunk_size': 210,
         'backbone': 'dino_v2',
+        'temporal_agg':True,
+        'max_timesteps': loop_len,
     }
     ActionGeneration = ActionGenerator(config)
     if args['joint_true'] is True:
@@ -78,6 +80,7 @@ def main(args):
 
     for i in tqdm(range(loop_len)):
         # print(f"roll:{i}")
+        ActionGeneration.t = i
         image_dict = {
             'top': camera_top_data[i],
             'right_wrist': camera_right_data[i],

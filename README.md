@@ -75,6 +75,10 @@ python3 examples/depth_viewer.py
 python3 examples/net_device.py # Requires ffmpeg installation for network device
 ```
 ### 硬件安装
+```bash
+# 睿尔曼机械臂api2库
+pip install Robotic_Arm
+```
 
 #### 启动相机流程
 

@@ -173,7 +173,7 @@ def main():
     if not os.path.exists(save_image_dir):
         os.mkdir(save_image_dir)
     start_streams(pipelines, configs)
-    max_timesteps = 100
+    # max_timesteps = 100
     qpos_list = []
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
     actions_list = []
@@ -181,10 +181,12 @@ def main():
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/models/auto_1_12-21',
+        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/hdf5_files',
         'policy_class': 'ACT',
         'chunk_size': 210,
         'backbone': 'dino_v2',
+        'temporal_agg': False,
+        'max_timesteps': max_timesteps,
     }
     ActionGenerator1= ActionGenerator(config)
     global stop_processing
@@ -192,6 +194,7 @@ def main():
         for i in tqdm(range(max_timesteps)):
             # 创建并启动监听器
             start = time.time()
+            ActionGenerator1.t = i
             print(f"\n"
                   f"---------------------------------------------episode{i}--------------------------------------------------------\n")
             image = process_frames(pipelines)

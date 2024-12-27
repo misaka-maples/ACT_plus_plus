@@ -79,7 +79,8 @@ class ActionGenerator:
         返回：
         - policy: 加载后的策略模型。
         """
-        ckpt_path = os.path.join(self.ckpt_dir, 'policy_step_1500_seed_0.ckpt')
+        # ckpt_path = os.path.join(self.ckpt_dir, 'policy_step_1500_seed_0.ckpt')
+        ckpt_path = os.path.join(self.ckpt_dir, 'policy_best.ckpt')
         policy = make_policy(self.policy_class, self.policy_config)
         policy.deserialize(torch.load(ckpt_path, weights_only=True))
         policy.cuda()
@@ -134,6 +135,7 @@ class ActionGenerator:
         if self.temporal_agg:
             self.all_time_actions = torch.zeros([self.max_timesteps, self.max_timesteps + self.num_queries, self.policy_config['action_dim']]).cuda()
             self.query_frequency=1
+            # self.query_frequency = args['chunk_size']
         # 查询策略模型
         if self.policy_class == "ACT":
             all_actions = self.policy(qpos, curr_image)

@@ -8,6 +8,7 @@ from Robotic_Arm.rm_robot_interface import *
 import math, h5py
 import cv2
 import numpy as np
+from setuptools.command.setopt import edit_config
 from tqdm import tqdm
 from pyorbbecsdk import *
 from utils import frame_to_bgr_image
@@ -31,7 +32,7 @@ serial_number=[]
 # Load config file for multiple devices
 config_file_path = os.path.join(os.path.dirname(__file__), "/home/zhnh/Documents/project/act_arm_project/pyorbbecsdk-main/config/multi_device_sync_config.json")
 multi_device_sync_config = {}
-camera_names = ['top', 'right_wrist']
+camera_names = ['top', 'right_wrist','left_wrist']
 
 
 class QposRecorder:
@@ -203,11 +204,11 @@ def save_hdf5(max_timesteps, joints_nums, episode_idx, data_dict, reshape_hdf5_p
         images_group = obs.create_group('images')
 
         # 创建每个相机的数据集并写入数据
-        for cam_name in ['images/top', 'images/right_wrist']:  # 确保只处理相关键
-            if f'/observations/{cam_name}' in data_dict:
+        for cam_name in camera_names:  # 确保只处理相关键
+            if f'/observations/images/{cam_name}' in data_dict:
                 images_group.create_dataset(
                     cam_name.split('/')[-1],  # 使用相机名称作为数据集名称
-                    data=np.array(data_dict[f'/observations/{cam_name}']),
+                    data=np.array(data_dict[f'/observations/images/{cam_name}']),
                     dtype='uint8',
                     # compression='gzip',
                     # compression_opts=4
@@ -405,6 +406,11 @@ def main():
             elif curr_device_cnt == 2:
                 images_dict['top'].append(cv2.resize(image[1], (640, 480)))
                 images_dict['right_wrist'].append(cv2.resize(image[0], (640, 480)))
+            elif curr_device_cnt ==3:
+                images_dict['top'].append(cv2.resize(image[1], (640, 480)))
+                images_dict['right_wrist'].append(cv2.resize(image[0], (640, 480)))
+                images_dict['left_wrist'].append(cv2.resize(image[2], (640, 480)))
+
             else:
                 raise "device error"
             if i==0:

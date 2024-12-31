@@ -207,11 +207,11 @@ def save_hdf5(max_timesteps, joints_nums, episode_idx, data_dict, reshape_hdf5_p
         images_group = obs.create_group('images')
 
         # 创建每个相机的数据集并写入数据
-        for cam_name in ['images/top', 'images/right_wrist']:  # 确保只处理相关键
-            if f'/observations/{cam_name}' in data_dict:
+        for cam_name in camera_names:  # 确保只处理相关键
+            if f'/observations/images/{cam_name}' in data_dict:
                 images_group.create_dataset(
                     cam_name.split('/')[-1],  # 使用相机名称作为数据集名称
-                    data=np.array(data_dict[f'/observations/{cam_name}']),
+                    data=np.array(data_dict[f'/observations/images/{cam_name}']),
                     dtype='uint8',
                     # compression='gzip',
                     # compression_opts=4
@@ -255,7 +255,7 @@ def rand_pos(standard_final_pos, b):
     random_pos = standard_final_pos.copy()
     random_pos[0] += random_number
     random_pos[2] += random_number
-    print(random_pos)
+    # print(random_pos)
     return random_pos
 def save_images_from_dict(data_dict, output_dir):
     """
@@ -342,6 +342,7 @@ def move_j(rand_pos):
     posRecorder.real_right_arm.rm_movej_p(temp_, 14, 0, 1, 0)
     posRecorder.real_right_arm.rm_movej_p(queue_action[0],14, 0, 0, 0)
 def move_back(rand_):
+    print("move_back_to_origin_position")
     rand_position = rand_pos(rand_,0.05)
     # print(final_pos)
     posRecorder.real_right_arm.rm_set_tool_voltage(3)
@@ -354,13 +355,17 @@ def move_back(rand_):
     posRecorder.real_right_arm.rm_movej_p(temp_, v, 0, 0, 1)
     posRecorder.real_right_arm.rm_movej_p(original_pos, v, 0, 0, 1)
     while True:
-
+        temp_ = rand_position.copy()
+        temp_[1] = temp_[1] - 0.1
+        posRecorder.real_right_arm.rm_movej_p(temp_, v, 0, 0, 1)
         rand_pos_back = posRecorder.real_right_arm.rm_movej_p(rand_position, v, 0, 0, 1)
+        posRecorder.real_right_arm.rm_set_tool_voltage(0)
+        posRecorder.real_right_arm.rm_movej_p(temp_, v, 0, 0, 1)
         if rand_pos_back==1:
             print(f"error pos:{rand_position} rand again")
         elif rand_pos_back==0:
             break
-    posRecorder.real_right_arm.rm_set_tool_voltage(0)
+    # posRecorder.real_right_arm.rm_set_tool_voltage(0)
     posRecorder.real_right_arm.rm_movej_p(original_pos, v, 0, 0, 1)
     return rand_position
 
@@ -369,7 +374,7 @@ def main(rand_pos, indx, pipelines):
     get_image_number = 0
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
     max_len = 0
-    global stop_processing
+    global stop_processing,serial_number_list
     try:
         now = time.time()
         for i in range(30):
@@ -400,20 +405,25 @@ def main(rand_pos, indx, pipelines):
             radius_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
             # print(radius_qpos[6])
             qpos_list.append(radius_qpos)
-            if curr_device_cnt==1:
+            if curr_device_cnt==1 :
                 images_dict['top'].append(cv2.resize(image[0], (640, 480)))
-            elif curr_device_cnt == 2:
+            elif curr_device_cnt == 2 and 'CP1L44P0004Y' in serial_number_list and 'CP1E54200056' in serial_number_list:
+                images_dict['top'].append(cv2.resize(image[0], (640, 480)))
+                images_dict['right_wrist'].append(cv2.resize(image[1], (640, 480)))
+            elif curr_device_cnt ==3 and 'CP1L44P0006E' in serial_number_list and 'CP1E54200056' in serial_number_list and 'CP1L44P0004Y' in serial_number_list:
                 images_dict['top'].append(cv2.resize(image[1], (640, 480)))
                 images_dict['right_wrist'].append(cv2.resize(image[0], (640, 480)))
+                images_dict['left_wrist'].append(cv2.resize(image[2], (640, 480)))
+
             else:
                 raise "device error"
             for name in camera_names:
                 filename_ = os.path.join(os.getcwd(), "color_images", f"color_image_{name}_{i}.png")
-                if name =='top' and get_image_number <=0:
+                if name =='top' and get_image_number <=0 and 'CP1L44P0006E' in serial_number_list:
                     # print(get_image_number)
-                    cv2.imwrite(filename_,cv2.resize(image[0], (640, 480)))
-                if name == 'right_wrist' and curr_device_cnt == 2 and get_image_number <=0:
                     cv2.imwrite(filename_,cv2.resize(image[1], (640, 480)))
+                if name == 'right_wrist' and 'CP1E54200056' in serial_number_list and get_image_number <=0:
+                    cv2.imwrite(filename_,cv2.resize(image[0], (640, 480)))
                     get_image_number += 1
 
             # print(f"7 joint :{posRecorder.get_state()[-1]}")
@@ -458,7 +468,7 @@ def main(rand_pos, indx, pipelines):
             joints_nums=7,
             episode_idx=indx,
             data_dict=data_dict,
-            reshape_hdf5_path='../save_dir_hdf5_12_24_mor'
+            reshape_hdf5_path='../temp'
         )
         # 确保监听器线程被正确关闭
         # listener_thread.join()
@@ -474,12 +484,14 @@ if __name__ == "__main__":
 
     pipelines = []
     configs = []
+    serial_number_list = []
     curr_device_cnt = device_list.get_count()
     for i in range(min(device_list.get_count(), MAX_DEVICES)):
         device = device_list.get_device_by_index(i)
         pipeline = Pipeline(device)
         config = Config()
         serial_number = device.get_device_info().get_serial_number()
+        serial_number_list.append(serial_number)
         sync_config_json = multi_device_sync_config[serial_number]
         sync_config = device.get_multi_device_sync_config()
         sync_config.mode = sync_mode_from_str(sync_config_json["config"]["mode"])
@@ -518,16 +530,15 @@ if __name__ == "__main__":
     # time.sleep(1111)
     # s= time.time()
 
-    main(standard_final_pos,0, pipelines)
+    # main(standard_final_pos,0, pipelines)
     # move_back(standard_final_pos)
     # time.sleep(1111)
 
-    for i in range(9):
-        print(f"i:{i+1}")
+    for i in range(20):
+        print(f"i:{i+32}")
         # print(posRecorder.real_right_arm.rm_get_tool_voltage())
         final = move_back(standard_final_pos)
-
-        main(final,i+1,pipelines)
+        main(final,i+32,pipelines)
     stop_streams(pipelines)
 
     end = time.time()

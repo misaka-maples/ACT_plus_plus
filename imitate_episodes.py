@@ -23,10 +23,13 @@
 #             sys.path.append(directory)
 #
 # get_env_()
+from sched import scheduler
+
 import wandb
 import torch
 import numpy as np
 import os
+import  math
 import pickle
 import argparse
 import matplotlib.pyplot as plt
@@ -37,6 +40,7 @@ from einops import rearrange
 
 import time
 from torchvision import transforms
+from torch.optim.lr_scheduler import LambdaLR
 
 from constants import FPS
 from constants import PUPPET_GRIPPER_JOINT_OPEN
@@ -47,7 +51,7 @@ from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
 from detr.models.latent_model import Latent_Model_Transformer
 from sim_env import BOX_POSE
 import os
-# os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
+os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
 # settings = wandb.Set tings(
 #     moitor_=False,       # 禁用 GPU 监控
 #     monitor_cpu=False,        # 禁用 CPU 监控
@@ -94,7 +98,7 @@ def main(args):
     validate_every = task_config['validate_every']
     save_every = task_config['save_every']
     resume_ckpt_path = task_config['resume_ckpt_path']
-
+    resume_ckpt = task_config['resume_ckpt']
     # get task parameters
 
     dataset_dir = task_config['dataset_dir']
@@ -169,6 +173,7 @@ def main(args):
         'save_every': save_every,
         'ckpt_dir': ckpt_dir,
         'resume_ckpt_path': resume_ckpt_path,
+        'resume_ckpt':resume_ckpt,
         'episode_len': episode_len,
         'state_dim': state_dim,
         'lr': policy_config['lr'],
@@ -261,6 +266,32 @@ def make_optimizer(policy_class, policy):
         raise NotImplementedError
     return optimizer
 
+def get_cosine_schedule_with_warmup(
+    optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5
+):
+    def lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        progress = float(current_step - num_warmup_steps) / float(
+            max(1, num_training_steps - num_warmup_steps)
+        )
+        return max(
+            0.0, 0.5 * (1.0 + math.cos(math.pi * float(num_cycles) * 2.0 * progress))
+        )
+
+    return LambdaLR(optimizer, lr_lambda)
+
+
+def make_fixed_lr_scheduler(optimizer):
+    return LambdaLR(optimizer, lambda epoch: 1.0)
+
+
+def make_scheduler(optimizer, num_steps):
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer, num_warmup_steps=num_steps // 100, num_training_steps=num_steps
+    ) # 模拟退火调整学习率
+    # scheduler = make_fixed_lr_scheduler(optimizer) # 固定学习率
+    return scheduler
 
 def get_image(ts, camera_names, rand_crop_resize=False):
     curr_images = []
@@ -606,11 +637,12 @@ def train_bc(train_dataloader, val_dataloader, config):
     if config['load_pretrain']:
         loading_status = policy.deserialize(torch.load(os.path.join('/home/zfu/interbotix_ws/src/act/ckpts/pretrain_all', 'policy_step_50000_seed_0.ckpt')))
         print(f'loaded! {loading_status}')
-    if os.path.exists(config['resume_ckpt_path']) is True:
+    if os.path.exists(config['resume_ckpt_path']) is True and config['resume_ckpt']:
         loading_status = policy.deserialize(torch.load(config['resume_ckpt_path']))
         print(f'Resume policy from: {config["resume_ckpt_path"]}, Status: {loading_status}')
     policy.cuda()
     optimizer = make_optimizer(policy_class, policy)
+    scheduler = make_scheduler(optimizer, num_steps)
 
     min_val_loss = np.inf
     best_ckpt_info = None
@@ -658,14 +690,19 @@ def train_bc(train_dataloader, val_dataloader, config):
         # training
         policy.train()
         optimizer.zero_grad()
+        scheduler.step()
         data = next(train_dataloader)
         forward_dict = forward_pass(data, policy)
         # backward
         loss = forward_dict['loss']
         loss.backward()
         optimizer.step()
+        optimizer.zero_grad()
         wandb.log(forward_dict, step=step) # not great, make training 1.md-2% slower
-
+        epoch_summary = detach_dict(forward_dict)
+        epoch_train_loss = epoch_summary['loss']
+        print(f'Train loss: {epoch_train_loss:.5f}')
+        epoch_summary["lr"] = np.array(scheduler.get_last_lr() [0])
         if step % save_every == 0:
             ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')
             torch.save(policy.serialize(), ckpt_path)

@@ -181,10 +181,10 @@ def main():
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/hdf5_files',
+        'ckpt_dir': '/home/zhnh/Documents/project/act_arm_project/temp',
         'policy_class': 'ACT',
         'chunk_size': 210,
-        'backbone': 'dino_v2',
+        'backbone': 'resnet18',
         'temporal_agg': False,
         'max_timesteps': max_timesteps,
     }
@@ -205,8 +205,8 @@ def main():
             qpos_list.append(radius_qpos)
             images_dict['right_wrist']=image[0]
             images_dict['top']=image[1]
-            cv2.imwrite(os.path.join(save_image_dir,current_time.strftime("%m-%d %H:%M") + f"top{i}.png"), np.array(images_dict['top']))
-            cv2.imwrite(os.path.join(save_image_dir,current_time.strftime("%m-%d %H:%M") + f"right{i}.png"), np.array(images_dict['right_wrist']))
+            # cv2.imwrite(os.path.join(save_image_dir,current_time.strftime("%m-%d %H:%M") + f"top{i}.png"), np.array(images_dict['top']))
+            # cv2.imwrite(os.path.join(save_image_dir,current_time.strftime("%m-%d %H:%M") + f"right{i}.png"), np.array(images_dict['right_wrist']))
             ActionGenerator1.image_dict = images_dict
             ActionGenerator1.qpos_list = radius_qpos
             # cv2.imshow("top" ,image[0])
@@ -214,6 +214,7 @@ def main():
             # key = cv2.waitKey(1)
             # if key == ord('q') or key == ESC_KEY:
             #     return
+
 
             now = time.time()
 

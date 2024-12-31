@@ -143,7 +143,7 @@ def modify_hdf5(file_path, compress=None, truncate_ranges=None):
             camera_right_data = f[right][:]
             qpos = f[qpos][:]
             actions = f[action][:]
-
+            print(qpos[0])
             # print(f"camera_top_data.shape: {camera_top_data.shape}, camera_right_data.shape: {camera_right_data.shape}")
 
             # 解压逻辑
@@ -422,7 +422,7 @@ def save_hdf5(file_path, joints_nums, episode_idx, data_dict, reshape_hdf5_path)
 
         # 保存 data_dict 中的数据
         for name, array in data_dict.items():
-            # print(data_dict.items)
+            # print(data_dict.items).
             if name not in root:
                 root.create_dataset(name, data=array)
             else:
@@ -487,10 +487,11 @@ if __name__ == '__main__':
     #     'right_wrist': (45, 100),
     #     'qpos': (45, 100),
     # }
-    # modify_hdf5(DATA_DIR + '\\reshape_hdf5\\episode_0.hdf5', compress=True)
+    # modify_hdf5('/home/zhnh/Documents/project/act_arm_project/hdf5_files/Isaac_hdf5/episode_1.hdf5', compress=True)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
-    save_video(r'/home/zhnh/Documents/project/act_arm_project/hdf5_files/save_dir/save_dir_hdf5_12_20/', fps=30, i=20)
+    for i in range(32,53):
+        save_video(r'/home/zhnh/Documents/project/act_arm_project/temp', fps=30, i=i)
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀

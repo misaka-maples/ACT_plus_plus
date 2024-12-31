@@ -183,7 +183,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
         self.max_episode_len = max(episode_len)
         # self.max_episode_len = 100
         self.policy_class = policy_class
-        if self.policy_class == 'Diffusion':
+        if self.policy_class == 'ACT':
             self.augment_images = True
         else:
             self.augment_images = False

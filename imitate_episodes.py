@@ -173,7 +173,7 @@ def main(args):
         'save_every': save_every,
         'ckpt_dir': ckpt_dir,
         'resume_ckpt_path': resume_ckpt_path,
-        'resume_ckpt':resume_ckpt,
+        'resume_ckpt': resume_ckpt,
         'episode_len': episode_len,
         'state_dim': state_dim,
         'lr': policy_config['lr'],
@@ -213,7 +213,7 @@ def main(args):
         print()
         exit()
 
-    train_dataloader, val_dataloader, stats, _ = load_data(dataset_dir, name_filter, camera_names, batch_size_train, batch_size_val, task_config['chunk_size'], args['skip_mirrored_data'], config['load_pretrain'], policy_class, stats_dir_l=stats_dir, sample_weights=sample_weights, train_ratio=train_ratio)
+    train_dataloader, val_dataloader, stats, _ = load_data(dataset_dir, name_filter, camera_names, batch_size_train, batch_size_val, task_config['chunk_size'], args['skip_mirrored_data'], config['load_pretrain'], policy_class, stats_dir_l=stats_dir, sample_weights=sample_weights, train_ratio=train_ratio, num_workers=task_config['num_workers'], val_workers=task_config['val_workers'])
 
     # save dataset stats
     stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')

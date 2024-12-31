@@ -296,7 +296,14 @@ class ACTPolicy(nn.Module):
 
             loss_dict['l1'] = l1
             loss_dict['kl'] = total_kld[0]
-            loss_dict['loss'] =  loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
+            loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
+            joint_limits = {
+                'min': [-1.0, -0.5, -1.5, -1.5, -1.5, -1.5, -1.5, -1.5, -1.5],  # Minimum joint values for each joint
+                'max': [1.0, 0.5, 1.5, 1.0, 0.5, 1.5, 1.5, 1.5, 1.5]  # Maximum joint values for each joint
+            }
+
+            loss_fn = JointControlLoss(joint_limits=joint_limits, smoothness_weight=0.5, constraint_weight=2.0, )
+            loss_dict['loss_fn'] = loss_fn(actions, a_hat)
             return loss_dict
         else:  # 推理模式
             a_hat, _, (_, _), _, _ = self.model(qpos, image, env_state, vq_sample=vq_sample)  # 采样自先验
@@ -348,6 +355,59 @@ class ACTPolicy(nn.Module):
         return self.load_state_dict(model_dict)
 
 
+class JointControlLoss(nn.Module):
+    def __init__(self, joint_limits=None, smoothness_weight=1.0, constraint_weight=1.0):
+        """
+        :param joint_limits: Dictionary with 'min' and 'max' joint limits, e.g., {'min': q_min, 'max': q_max}.
+        :param smoothness_weight: Weight for smoothness loss.
+        :param constraint_weight: Weight for joint limit constraint loss.
+        """
+        super(JointControlLoss, self).__init__()
+        self.joint_limits = joint_limits
+        self.smoothness_weight = smoothness_weight
+        self.constraint_weight = constraint_weight
+        self.mse_loss = nn.MSELoss()
+
+    def forward(self, pred_joints, target_joints):
+        """
+        :param pred_joints: Predicted joint values, shape (batch_size, time_steps, num_joints).
+        :param target_joints: Target joint values, shape (batch_size, time_steps, num_joints).
+        :return: Total loss value (on cuda device).
+        """
+        # Ensure inputs are tensors and move them to the same device (cuda)
+        device = pred_joints.device  # Get the device of pred_joints
+        pred_joints = pred_joints.to(device)
+        target_joints = target_joints.to(device)
+
+        # 1. Mean Squared Error (MSE) Loss for trajectory tracking
+        mse_loss = self.mse_loss(pred_joints, target_joints)
+
+        # 2. Smoothness Loss (L2 norm of differences between consecutive time steps)
+        smoothness_loss = 0.0
+        if pred_joints.shape[1] > 1:  # Time steps > 1
+            smoothness_loss = torch.mean(
+                torch.sum((pred_joints[:, 1:] - pred_joints[:, :-1]) ** 2, dim=-1)
+            )
+
+        # 3. Joint Constraint Loss
+        constraint_loss = 0.0
+        if self.joint_limits:
+            q_min = torch.tensor(self.joint_limits['min'], dtype=torch.float32).to(device)
+            q_max = torch.tensor(self.joint_limits['max'], dtype=torch.float32).to(device)
+
+            lower_violation = torch.clamp(q_min - pred_joints, min=0)  # Violation below minimum
+            upper_violation = torch.clamp(pred_joints - q_max, min=0)  # Violation above maximum
+            constraint_loss = torch.mean(lower_violation + upper_violation)
+
+        # Combine losses with weights
+        total_loss = (
+            mse_loss
+            + self.smoothness_weight * smoothness_loss
+            + self.constraint_weight * constraint_loss
+        )
+
+        return total_loss
+
 
 class CNNMLPPolicy(nn.Module):
     def __init__(self, args_override):
@@ -390,3 +450,30 @@ def kl_divergence(mu, logvar):
     mean_kld = klds.mean(1).mean(0, True)
 
     return total_kld, dimension_wise_kld, mean_kld
+
+
+class ImitationNetwork(nn.Module):
+    def __init__(self, image_feature_dim=128, state_dim=7, action_dim=7):
+        super(ImitationNetwork, self).__init__()
+        # 图像特征提取
+        self.cnn = nn.Sequential(
+            nn.Conv2d(6, 32, kernel_size=3, stride=2, padding=1),  # [B, 32, 112, 112]
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),  # [B, 64, 56, 56]
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(64 * 120 * 160, image_feature_dim),
+            nn.ReLU()
+        )
+        # 全连接层
+        self.fc = nn.Sequential(
+            nn.Linear(image_feature_dim+state_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, action_dim)
+        )
+
+    def forward(self, image, state):
+        img_feat = self.cnn(image)
+        combined = torch.cat([img_feat, state], dim=1)  # 拼接图像特征和状态
+        action = self.fc(combined)
+        return action

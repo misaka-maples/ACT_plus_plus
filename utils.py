@@ -18,152 +18,157 @@ from typing import Union, Any, Optional
 
 import cv2
 import numpy as np
+orbbecsdk=False
+if orbbecsdk:
+    from pyorbbecsdk import FormatConvertFilter, VideoFrame
+    from pyorbbecsdk import OBFormat, OBConvertFormat
 
-from pyorbbecsdk import FormatConvertFilter, VideoFrame
-from pyorbbecsdk import OBFormat, OBConvertFormat
+
+    def visualize_joints(qpos_list, command_list, plot_path=None, ylim=None, label_overwrite=None):
+        if label_overwrite:
+            label1, label2 = label_overwrite
+        else:
+            label1, label2 = 'State', 'Command'
+
+        qpos = np.array(qpos_list)  # 转为 NumPy 数组
+        command = np.array(command_list)
+        num_ts, num_dim = qpos.shape  # 时间步和维度数
+        h, w = 2, num_dim
+        num_figs = num_dim
+        fig, axs = plt.subplots(num_figs, 1, figsize=(w, h * num_figs))
+
+        # 绘制关节状态
+        all_names = [name + '_left' for name in STATE_NAMES] + [name + '_right' for name in STATE_NAMES]
+        for dim_idx in range(num_dim):
+            ax = axs[dim_idx]
+            ax.plot(qpos[:, dim_idx], label=label1)
+            ax.set_title(f'Joint {dim_idx}: {all_names[dim_idx]}')
+            ax.legend()
+
+        # 绘制动作指令
+        for dim_idx in range(num_dim):
+            ax = axs[dim_idx]
+            ax.plot(command[:, dim_idx], label=label2)
+            ax.legend()
+
+        if ylim:
+            for dim_idx in range(num_dim):
+                ax = axs[dim_idx]
+                ax.set_ylim(ylim)
+
+        plt.tight_layout()
+        plt.savefig(plot_path)
+        print(f'Saved qpos plot to: {plot_path}')
+        plt.close()
+
+
+    def yuyv_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
+        yuyv = frame.reshape((height, width, 2))
+        bgr_image = cv2.cvtColor(yuyv, cv2.COLOR_YUV2BGR_YUY2)
+        return bgr_image
+
+
+    def uyvy_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
+        uyvy = frame.reshape((height, width, 2))
+        bgr_image = cv2.cvtColor(uyvy, cv2.COLOR_YUV2BGR_UYVY)
+        return bgr_image
+
+
+    def i420_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
+        y = frame[0:height, :]
+        u = frame[height:height + height // 4].reshape(height // 2, width // 2)
+        v = frame[height + height // 4:].reshape(height // 2, width // 2)
+        yuv_image = cv2.merge([y, u, v])
+        bgr_image = cv2.cvtColor(yuv_image, cv2.COLOR_YUV2BGR_I420)
+        return bgr_image
+
+
+    def nv21_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
+        y = frame[0:height, :]
+        uv = frame[height:height + height // 2].reshape(height // 2, width)
+        yuv_image = cv2.merge([y, uv])
+        bgr_image = cv2.cvtColor(yuv_image, cv2.COLOR_YUV2BGR_NV21)
+        return bgr_image
+
+
+    def nv12_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
+        y = frame[0:height, :]
+        uv = frame[height:height + height // 2].reshape(height // 2, width)
+        yuv_image = cv2.merge([y, uv])
+        bgr_image = cv2.cvtColor(yuv_image, cv2.COLOR_YUV2BGR_NV12)
+        return bgr_image
+
+
+    def determine_convert_format(frame: VideoFrame):
+        if frame.get_format() == OBFormat.I420:
+            return OBConvertFormat.I420_TO_RGB888
+        elif frame.get_format() == OBFormat.MJPG:
+            return OBConvertFormat.MJPG_TO_RGB888
+        elif frame.get_format() == OBFormat.YUYV:
+            return OBConvertFormat.YUYV_TO_RGB888
+        elif frame.get_format() == OBFormat.NV21:
+            return OBConvertFormat.NV21_TO_RGB888
+        elif frame.get_format() == OBFormat.NV12:
+            return OBConvertFormat.NV12_TO_RGB888
+        elif frame.get_format() == OBFormat.UYVY:
+            return OBConvertFormat.UYVY_TO_RGB888
+        else:
+            return None
+
+
+    def frame_to_rgb_frame(frame: VideoFrame) -> Union[Optional[VideoFrame], Any]:
+        if frame.get_format() == OBFormat.RGB:
+            return frame
+        convert_format = determine_convert_format(frame)
+        if convert_format is None:
+            print("Unsupported format")
+            return None
+        print("covert format: {}".format(convert_format))
+        convert_filter = FormatConvertFilter()
+        convert_filter.set_format_convert_format(convert_format)
+        rgb_frame = convert_filter.process(frame)
+        if rgb_frame is None:
+            print("Convert {} to RGB failed".format(frame.get_format()))
+        return rgb_frame
+
+
+    def frame_to_bgr_image(frame: VideoFrame) -> Union[Optional[np.array], Any]:
+        width = frame.get_width()
+        height = frame.get_height()
+        color_format = frame.get_format()
+        data = np.asanyarray(frame.get_data())
+        image = np.zeros((height, width, 3), dtype=np.uint8)
+        if color_format == OBFormat.RGB:
+            image = np.resize(data, (height, width, 3))
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        elif color_format == OBFormat.BGR:
+            image = np.resize(data, (height, width, 3))
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        elif color_format == OBFormat.YUYV:
+            image = np.resize(data, (height, width, 2))
+            image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_YUYV)
+        elif color_format == OBFormat.MJPG:
+            image = cv2.imdecode(data, cv2.IMREAD_COLOR)
+        elif color_format == OBFormat.I420:
+            image = i420_to_bgr(data, width, height)
+            return image
+        elif color_format == OBFormat.NV12:
+            image = nv12_to_bgr(data, width, height)
+            return image
+        elif color_format == OBFormat.NV21:
+            image = nv21_to_bgr(data, width, height)
+            return image
+        elif color_format == OBFormat.UYVY:
+            image = np.resize(data, (height, width, 2))
+            image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_UYVY)
+        else:
+            print("Unsupported color format: {}".format(color_format))
+            return None
+        return image
+
 # 定义关节和状态名称
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 STATE_NAMES = JOINT_NAMES + ["gripper"]
-def visualize_joints(qpos_list, command_list, plot_path=None, ylim=None, label_overwrite=None):
-    if label_overwrite:
-        label1, label2 = label_overwrite
-    else:
-        label1, label2 = 'State', 'Command'
-
-    qpos = np.array(qpos_list)  # 转为 NumPy 数组
-    command = np.array(command_list)
-    num_ts, num_dim = qpos.shape  # 时间步和维度数
-    h, w = 2, num_dim
-    num_figs = num_dim
-    fig, axs = plt.subplots(num_figs, 1, figsize=(w, h * num_figs))
-
-    # 绘制关节状态
-    all_names = [name + '_left' for name in STATE_NAMES] + [name + '_right' for name in STATE_NAMES]
-    for dim_idx in range(num_dim):
-        ax = axs[dim_idx]
-        ax.plot(qpos[:, dim_idx], label=label1)
-        ax.set_title(f'Joint {dim_idx}: {all_names[dim_idx]}')
-        ax.legend()
-
-    # 绘制动作指令
-    for dim_idx in range(num_dim):
-        ax = axs[dim_idx]
-        ax.plot(command[:, dim_idx], label=label2)
-        ax.legend()
-
-    if ylim:
-        for dim_idx in range(num_dim):
-            ax = axs[dim_idx]
-            ax.set_ylim(ylim)
-
-    plt.tight_layout()
-    plt.savefig(plot_path)
-    print(f'Saved qpos plot to: {plot_path}')
-    plt.close()
-
-def yuyv_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    yuyv = frame.reshape((height, width, 2))
-    bgr_image = cv2.cvtColor(yuyv, cv2.COLOR_YUV2BGR_YUY2)
-    return bgr_image
-
-
-def uyvy_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    uyvy = frame.reshape((height, width, 2))
-    bgr_image = cv2.cvtColor(uyvy, cv2.COLOR_YUV2BGR_UYVY)
-    return bgr_image
-
-
-def i420_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    y = frame[0:height, :]
-    u = frame[height:height + height // 4].reshape(height // 2, width // 2)
-    v = frame[height + height // 4:].reshape(height // 2, width // 2)
-    yuv_image = cv2.merge([y, u, v])
-    bgr_image = cv2.cvtColor(yuv_image, cv2.COLOR_YUV2BGR_I420)
-    return bgr_image
-
-
-def nv21_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    y = frame[0:height, :]
-    uv = frame[height:height + height // 2].reshape(height // 2, width)
-    yuv_image = cv2.merge([y, uv])
-    bgr_image = cv2.cvtColor(yuv_image, cv2.COLOR_YUV2BGR_NV21)
-    return bgr_image
-
-
-def nv12_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    y = frame[0:height, :]
-    uv = frame[height:height + height // 2].reshape(height // 2, width)
-    yuv_image = cv2.merge([y, uv])
-    bgr_image = cv2.cvtColor(yuv_image, cv2.COLOR_YUV2BGR_NV12)
-    return bgr_image
-
-
-def determine_convert_format(frame: VideoFrame):
-    if frame.get_format() == OBFormat.I420:
-        return OBConvertFormat.I420_TO_RGB888
-    elif frame.get_format() == OBFormat.MJPG:
-        return OBConvertFormat.MJPG_TO_RGB888
-    elif frame.get_format() == OBFormat.YUYV:
-        return OBConvertFormat.YUYV_TO_RGB888
-    elif frame.get_format() == OBFormat.NV21:
-        return OBConvertFormat.NV21_TO_RGB888
-    elif frame.get_format() == OBFormat.NV12:
-        return OBConvertFormat.NV12_TO_RGB888
-    elif frame.get_format() == OBFormat.UYVY:
-        return OBConvertFormat.UYVY_TO_RGB888
-    else:
-        return None
-
-
-def frame_to_rgb_frame(frame: VideoFrame) -> Union[Optional[VideoFrame], Any]:
-    if frame.get_format() == OBFormat.RGB:
-        return frame
-    convert_format = determine_convert_format(frame)
-    if convert_format is None:
-        print("Unsupported format")
-        return None
-    print("covert format: {}".format(convert_format))
-    convert_filter = FormatConvertFilter()
-    convert_filter.set_format_convert_format(convert_format)
-    rgb_frame = convert_filter.process(frame)
-    if rgb_frame is None:
-        print("Convert {} to RGB failed".format(frame.get_format()))
-    return rgb_frame
-
-
-def frame_to_bgr_image(frame: VideoFrame) -> Union[Optional[np.array], Any]:
-    width = frame.get_width()
-    height = frame.get_height()
-    color_format = frame.get_format()
-    data = np.asanyarray(frame.get_data())
-    image = np.zeros((height, width, 3), dtype=np.uint8)
-    if color_format == OBFormat.RGB:
-        image = np.resize(data, (height, width, 3))
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    elif color_format == OBFormat.BGR:
-        image = np.resize(data, (height, width, 3))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    elif color_format == OBFormat.YUYV:
-        image = np.resize(data, (height, width, 2))
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_YUYV)
-    elif color_format == OBFormat.MJPG:
-        image = cv2.imdecode(data, cv2.IMREAD_COLOR)
-    elif color_format == OBFormat.I420:
-        image = i420_to_bgr(data, width, height)
-        return image
-    elif color_format == OBFormat.NV12:
-        image = nv12_to_bgr(data, width, height)
-        return image
-    elif color_format == OBFormat.NV21:
-        image = nv21_to_bgr(data, width, height)
-        return image
-    elif color_format == OBFormat.UYVY:
-        image = np.resize(data, (height, width, 2))
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_UYVY)
-    else:
-        print("Unsupported color format: {}".format(color_format))
-        return None
-    return image
 
 
 def flatten_list(l):
@@ -383,7 +388,7 @@ def BatchSampler(batch_size, episode_len_l, sample_weights):
         yield batch
 
 
-def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_size_val, chunk_size, skip_mirrored_data=False, load_pretrain=False, policy_class=None, stats_dir_l=None, sample_weights=None, train_ratio=0.99):
+def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_size_val, chunk_size, skip_mirrored_data=False, load_pretrain=False, policy_class=None, stats_dir_l=None, sample_weights=None, train_ratio=0.99, num_workers=None, val_workers=None):
     if type(dataset_dir_l) == str:
         dataset_dir_l = [dataset_dir_l]
     dataset_path_list_list = [find_all_hdf5(dataset_dir, skip_mirrored_data) for dataset_dir in dataset_dir_l]
@@ -431,13 +436,14 @@ def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_
 
     # construct dataset and dataloader
     train_dataset = EpisodicDataset(dataset_path_list, camera_names, norm_stats, train_episode_ids, train_episode_len, chunk_size, policy_class)
-    val_dataset = EpisodicDataset(dataset_path_list, camera_names, norm_stats, val_episode_ids, val_episode_len, chunk_size, policy_class)
-    train_num_workers = (8 if os.getlogin() == 'zfu' else 16) if train_dataset.augment_images else 2
-    val_num_workers = 8 if train_dataset.augment_images else 2
-    print(f'Augment images: {train_dataset.augment_images}, train_num_workers: {train_num_workers}, val_num_workers: {val_num_workers}')
-    train_dataloader = DataLoader(train_dataset, batch_sampler=batch_sampler_train, pin_memory=True, num_workers=train_num_workers, prefetch_factor=2)
-    val_dataloader = DataLoader(val_dataset, batch_sampler=batch_sampler_val, pin_memory=True, num_workers=val_num_workers, prefetch_factor=2)
+    # 获取一个批次的数据
 
+    val_dataset = EpisodicDataset(dataset_path_list, camera_names, norm_stats, val_episode_ids, val_episode_len, chunk_size, policy_class)
+    train_num_workers = num_workers
+    val_num_workers = val_workers
+    print(f'Augment images: {train_dataset.augment_images}, train_num_workers: {train_num_workers}, val_num_workers: {val_num_workers}')
+    train_dataloader = DataLoader(train_dataset, batch_sampler=batch_sampler_train, pin_memory=True, num_workers=train_num_workers, prefetch_factor=2, shuffle=False)
+    val_dataloader = DataLoader(val_dataset, batch_sampler=batch_sampler_val, pin_memory=True, num_workers=val_num_workers, prefetch_factor=2, shuffle=False)
     return train_dataloader, val_dataloader, norm_stats, train_dataset.is_sim
 
 

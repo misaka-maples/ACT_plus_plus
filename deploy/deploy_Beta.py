@@ -109,8 +109,7 @@ def main(args):
             posRecorder.real_right_arm.rm_movej(actions, 50, 0, 0, 1)
     today = current_time.strftime("%m-%d-%H-%M")
     path_save_image = os.path.join(os.getcwd(), "deploy_image", f"{today}")
-    if os.path.exists(path_save_image) is False:
-        os.mkdir(path_save_image)
+    os.makedirs(path_save_image, exist_ok=True)
     image_path = os.path.join(path_save_image, config['backbone']+"_"+ os.path.splitext(config['ckpt_name'])[0]+ ".png")
     loss_apth = os.path.join(path_save_image, 'loss' + current_time.strftime("%m-%d-%H-%M") + ".png")
     visualize_joints(qpos_list, actions_list, image_path)

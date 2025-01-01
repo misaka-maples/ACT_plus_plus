@@ -254,7 +254,7 @@ def main():
                                            "deploy_image","deploy_api",current_time.strftime("%m-%d-%H-%M"))
         os.makedirs(path_save_image, exist_ok=True)
         path__ = os.path.join(path_save_image, current_time.strftime("%m-%d %H:%M") + ".png")
-        visualize_joints(qpos_list_, actions_list, path_save_image)
+        visualize_joints(qpos_list_, actions_list, path__)
         stop_streams(pipelines)
 def interpolate_with_step_limit(array1, array2, step=10):
     result = []

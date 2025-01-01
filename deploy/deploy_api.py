@@ -182,6 +182,7 @@ def main():
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
         'ckpt_dir': '/home/zhnh/Documents/project/act_arm_project/temp',
+        'ckpt_name': "policy_best.ckpt",
         'policy_class': 'ACT',
         'chunk_size': 210,
         'backbone': 'resnet18',
@@ -250,7 +251,9 @@ def main():
     finally:
         print("===============Stopping pipelines==============")
         path_save_image = os.path.join(r"/home/zhnh/Documents/project/act_arm_project/deploy",
-                                           "deploy_image", current_time.strftime("%m-%d %H:%M") + ".png")
+                                           "deploy_image","deploy_api",current_time.strftime("%m-%d-%H-%M"))
+        os.makedirs(path_save_image, exist_ok=True)
+        path__ = os.path.join(path_save_image, current_time.strftime("%m-%d %H:%M") + ".png")
         visualize_joints(qpos_list_, actions_list, path_save_image)
         stop_streams(pipelines)
 def interpolate_with_step_limit(array1, array2, step=10):

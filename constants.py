@@ -64,7 +64,7 @@ RIGHT_ARM_TASK_CONFIGS = {
         'ckpt_dir': DATA_DIR,
         'policy_class': 'ACT',
         'task_name': 'right_arm_train',
-        'batch_size': 16,
+        'batch_size': 1,
         'seed': 0,
         'num_steps': 15000,
         'lr': 2e-5,
@@ -86,6 +86,8 @@ RIGHT_ARM_TASK_CONFIGS = {
         'qpos_noise_std': 0,
         'dropout': 0.1,
         'train_ratio': 0.95,
+        'num_workers': 2,
+        'val_workers': 2,
     },
     'train_test': {
         'dataset_dir': HDF5_DIR,

@@ -4,8 +4,8 @@ import os
 ### Task parameters
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 
-# DATA_DIR = 'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_model'
-DATA_DIR = r"/home/zhnh/Documents/project/act_arm_project/hdf5_files"
+DATA_DIR = 'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_model'
+# DATA_DIR = r"/home/zhnh/Documents/project/act_arm_project/hdf5_files"
 HDF5_DIR = DATA_DIR + r'/save_dir'
 SIM_TASK_CONFIGS = {
     'sim_transfer_cube_scripted': {
@@ -64,10 +64,10 @@ RIGHT_ARM_TASK_CONFIGS = {
         'ckpt_dir': DATA_DIR,
         'policy_class': 'ACT',
         'task_name': 'right_arm_train',
-        'batch_size': 1,
+        'batch_size': 8,
         'seed': 0,
-        'num_steps': 15000,
-        'lr': 2e-5,
+        'num_steps': 25000,
+        'lr': 1e-5,
         'num_episodes': None,
         'episode_len': 400,
         'camera_names': ['top', 'right_wrist'],
@@ -82,12 +82,13 @@ RIGHT_ARM_TASK_CONFIGS = {
         'resume_ckpt_path': DATA_DIR + 'policy_best.ckpt',
         'loss_save_every': 500,
         'eval': False,
-        'backbone': 'resnet18',
+        'new_loss': True,
+        'backbone': 'resnet34',
         'qpos_noise_std': 0,
-        'dropout': 0.1,
+        'dropout': 0.3,
         'train_ratio': 0.95,
-        'num_workers': 2,
-        'val_workers': 2,
+        'num_workers': 4,
+        'val_workers': 4,
     },
     'train_test': {
         'dataset_dir': HDF5_DIR,

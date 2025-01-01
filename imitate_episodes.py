@@ -137,6 +137,7 @@ def main(args):
                          'eval': False,
                          'qpos_noise_std': task_config['qpos_noise_std'],
                          'dropout': task_config['dropout'],
+                         'new_loss': task_config['new_loss'],
                          }
     elif policy_class == 'Diffusion':
 
@@ -285,10 +286,10 @@ def make_fixed_lr_scheduler(optimizer):
 
 
 def make_scheduler(optimizer, num_steps):
-    scheduler = get_cosine_schedule_with_warmup(
-        optimizer, num_warmup_steps=num_steps // 100, num_training_steps=num_steps
-    ) # 模拟退火调整学习率
-    # scheduler = make_fixed_lr_scheduler(optimizer) # 固定学习率
+    # scheduler = get_cosine_schedule_with_warmup(
+        # optimizer, num_warmup_steps=num_steps // 100, num_training_steps=num_steps
+    # ) # 模拟退火调整学习率
+    scheduler = make_fixed_lr_scheduler(optimizer) # 固定学习率
     return scheduler
 
 def get_image(ts, camera_names, rand_crop_resize=False):
@@ -689,13 +690,13 @@ def train_bc(train_dataloader, val_dataloader, config):
         # training
         policy.train()
         optimizer.zero_grad()
-        scheduler.step()
         data = next(train_dataloader)
         forward_dict = forward_pass(data, policy)
         # backward
         loss = forward_dict['loss']
         loss.backward()
         optimizer.step()
+        scheduler.step()
         optimizer.zero_grad()
         wandb.log(forward_dict, step=step) # not great, make training 1.md-2% slower
         epoch_summary = detach_dict(forward_dict)

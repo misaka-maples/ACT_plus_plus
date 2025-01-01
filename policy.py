@@ -207,8 +207,8 @@ class ACTPolicy(nn.Module):
         if args_override['eval'] == False:
             self.kl_weight = args_override['kl_weight']  # KL 散度权重
             self.vq = args_override['vq']  # 是否启用 VQ（Vector Quantization）
-            self.amplitude_weight = 0.1
             self.qpos_noise_std = args_override['qpos_noise_std']
+            self.test_loss = args_override['new_loss']
         # print(f'KL Weight {self.kl_weight}')
 
     def __call__(self, qpos, image, actions=None, is_pad=None, vq_sample=None):
@@ -288,22 +288,23 @@ class ACTPolicy(nn.Module):
             # 计算动作幅度奖励
             # action_amplitude_reward = torch.mean(torch.abs(a_hat))
             # loss_dict['amplitude_reward'] = -self.amplitude_weight * action_amplitude_reward
+            if self.test_loss:
+                # 调整 L1 损失
+                weight = torch.abs(actions)
+                all_l1 = F.l1_loss(actions, a_hat, reduction='none') * weight
+                l1 = (all_l1 * ~is_pad.unsqueeze(-1)).mean()
 
-            # 调整 L1 损失
-            weight = torch.abs(actions)
-            all_l1 = F.l1_loss(actions, a_hat, reduction='none') * weight
-            l1 = (all_l1 * ~is_pad.unsqueeze(-1)).mean()
+                loss_dict['l1'] = l1
+                loss_dict['kl'] = total_kld[0]
+                loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
+                joint_limits = {
+                    'min': [-1.0, -0.5, -1.5, -1.5, -1.5, -1.5, -1.5, -1.5, -1.5],
+                    # Minimum joint values for each joint
+                    'max': [1.0, 0.5, 1.5, 1.0, 0.5, 1.5, 1.5, 1.5, 1.5]  # Maximum joint values for each joint
+                }
 
-            loss_dict['l1'] = l1
-            loss_dict['kl'] = total_kld[0]
-            loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
-            joint_limits = {
-                'min': [-1.0, -0.5, -1.5, -1.5, -1.5, -1.5, -1.5, -1.5, -1.5],  # Minimum joint values for each joint
-                'max': [1.0, 0.5, 1.5, 1.0, 0.5, 1.5, 1.5, 1.5, 1.5]  # Maximum joint values for each joint
-            }
-
-            loss_fn = JointControlLoss(joint_limits=joint_limits, smoothness_weight=0.5, constraint_weight=2.0, )
-            loss_dict['loss_fn'] = loss_fn(actions, a_hat)
+                loss_fn = JointControlLoss(joint_limits=joint_limits, smoothness_weight=0.5, constraint_weight=2.0, )
+                loss_dict['loss_fn'] = loss_fn(actions, a_hat)
             return loss_dict
         else:  # 推理模式
             a_hat, _, (_, _), _, _ = self.model(qpos, image, env_state, vq_sample=vq_sample)  # 采样自先验

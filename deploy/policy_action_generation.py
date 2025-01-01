@@ -63,6 +63,7 @@ class ActionGenerator:
         # 载入策略模型
         self.ckpt_dir = args['ckpt_dir']
         self.policy_class = args['policy_class']
+        self.ckpt_name = args['ckpt_name']
         self.policy = self._load_policy()
         self.qpos_list = None
         self.image_dict = None
@@ -80,7 +81,7 @@ class ActionGenerator:
         - policy: 加载后的策略模型。
         """
         # ckpt_path = os.path.join(self.ckpt_dir, 'policy_step_1500_seed_0.ckpt')
-        ckpt_path = os.path.join(self.ckpt_dir, 'policy_best.ckpt')
+        ckpt_path = os.path.join(self.ckpt_dir, self.ckpt_name)
         policy = make_policy(self.policy_class, self.policy_config)
         policy.deserialize(torch.load(ckpt_path, weights_only=True))
         policy.cuda()

@@ -66,12 +66,13 @@ def main(args):
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/temp',
+        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/models/v0_1_resnet18',
         'policy_class': 'ACT',
         'chunk_size': 210,
         'backbone': 'resnet18',
         'temporal_agg':True,
         'max_timesteps': loop_len,
+        'ckpt_name': "policy_best.ckpt"
     }
     ActionGeneration = ActionGenerator(config)
     if args['joint_true'] is True:
@@ -106,19 +107,19 @@ def main(args):
                 posRecorder.real_right_arm.rm_set_tool_voltage(0)
             actions = [i * 180.0 / math.pi for i in actions[:6]]
             posRecorder.real_right_arm.rm_movej(actions, 50, 0, 0, 1)
-
-    path_save_image = os.path.join(os.getcwd(), "deploy_image")
+    today = current_time.strftime("%m-%d-%H-%M")
+    path_save_image = os.path.join(os.getcwd(), "deploy_image", f"{today}")
     if os.path.exists(path_save_image) is False:
         os.mkdir(path_save_image)
-    image_path = os.path.join(path_save_image, current_time.strftime("%m-%d-%H-%M") + ".png")
+    image_path = os.path.join(path_save_image, config['backbone']+"_"+ config['ckpt_name']+ ".png")
     loss_apth = os.path.join(path_save_image, 'loss' + current_time.strftime("%m-%d-%H-%M") + ".png")
     visualize_joints(qpos_list, actions_list, image_path)
-    plt.figure()
-    plt.plot(loss)
-    plt.legend(JOINT_NAMES)
-    plt.savefig(loss_apth)
-    plt.show()
-    plt.close()
+    # plt.figure()
+    # plt.plot(loss)
+    # plt.legend(JOINT_NAMES)
+    # plt.savefig(loss_apth)
+    # plt.show()
+    # plt.close()
     # print(actions_list)
 
 

@@ -98,7 +98,6 @@ def main(args):
     validate_every = task_config['validate_every']
     save_every = task_config['save_every']
     resume_ckpt_path = task_config['resume_ckpt_path']
-    resume_ckpt = task_config['resume_ckpt']
     # get task parameters
 
     dataset_dir = task_config['dataset_dir']
@@ -173,7 +172,6 @@ def main(args):
         'save_every': save_every,
         'ckpt_dir': ckpt_dir,
         'resume_ckpt_path': resume_ckpt_path,
-        'resume_ckpt': resume_ckpt,
         'episode_len': episode_len,
         'state_dim': state_dim,
         'lr': policy_config['lr'],
@@ -635,11 +633,11 @@ def train_bc(train_dataloader, val_dataloader, config):
 
     policy = make_policy(policy_class, policy_config)
     if config['load_pretrain']:
-        loading_status = policy.deserialize(torch.load(os.path.join('/home/zfu/interbotix_ws/src/act/ckpts/pretrain_all', 'policy_step_50000_seed_0.ckpt')))
-        print(f'loaded! {loading_status}')
-    if os.path.exists(config['resume_ckpt_path']) is True and config['resume_ckpt']:
         loading_status = policy.deserialize(torch.load(config['resume_ckpt_path']))
         print(f'Resume policy from: {config["resume_ckpt_path"]}, Status: {loading_status}')
+    # if os.path.exists(config['resume_ckpt_path']) is True and config['resume_ckpt']:
+    #     loading_status = policy.deserialize(torch.load(config['resume_ckpt_path']))
+    #     print(f'Resume policy from: {config["resume_ckpt_path"]}, Status: {loading_status}')
     policy.cuda()
     optimizer = make_optimizer(policy_class, policy)
     scheduler = make_scheduler(optimizer, num_steps)

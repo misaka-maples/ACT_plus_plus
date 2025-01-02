@@ -290,21 +290,21 @@ class ACTPolicy(nn.Module):
             # loss_dict['amplitude_reward'] = -self.amplitude_weight * action_amplitude_reward
             if self.test_loss:
                 # 调整 L1 损失
-                weight = torch.abs(actions)
-                all_l1 = F.l1_loss(actions, a_hat, reduction='none') * weight
+                # weight = torch.abs(torch.abs(a_hat)-torch.abs(actions))
+                all_l1 = F.l1_loss(actions, a_hat, reduction='none')
                 l1 = (all_l1 * ~is_pad.unsqueeze(-1)).mean()
 
                 loss_dict['l1'] = l1
                 loss_dict['kl'] = total_kld[0]
                 loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
                 joint_limits = {
-                    'min': [-1.0, -0.5, -1.5, -1.5, -1.5, -1.5, -1.5, -1.5, -1.5],
+                    'min': [-1.5, 0, 0, 0.5, 0.25, -1.2, 0, 0, 0],
                     # Minimum joint values for each joint
-                    'max': [1.0, 0.5, 1.5, 1.0, 0.5, 1.5, 1.5, 1.5, 1.5]  # Maximum joint values for each joint
+                    'max': [-0.3, 1.5, 1.5, 1.8, 1.25, 0, 3.2, 0, 0]  # Maximum joint values for each joint
                 }
 
                 loss_fn = JointControlLoss(joint_limits=joint_limits, smoothness_weight=0.5, constraint_weight=2.0, )
-                loss_dict['loss_fn'] = loss_fn(actions, a_hat)
+                loss_dict['loss']=loss_dict['loss']+loss_fn(actions, a_hat)
             return loss_dict
         else:  # 推理模式
             a_hat, _, (_, _), _, _ = self.model(qpos, image, env_state, vq_sample=vq_sample)  # 采样自先验
@@ -406,7 +406,7 @@ class JointControlLoss(nn.Module):
             + self.smoothness_weight * smoothness_loss
             + self.constraint_weight * constraint_loss
         )
-
+        # print(total_loss)
         return total_loss
 
 

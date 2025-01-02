@@ -701,16 +701,16 @@ def train_bc(train_dataloader, val_dataloader, config):
         wandb.log(forward_dict, step=step) # not great, make training 1.md-2% slower
         epoch_summary = detach_dict(forward_dict)
         epoch_train_loss = epoch_summary['loss']
-        print(f'Train loss: {epoch_train_loss:.5f}')
+
         epoch_summary["lr"] = np.array(scheduler.get_last_lr() [0])
         if step % save_every == 0:
             ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_normal.ckpt')
             torch.save(policy.serialize(), ckpt_path)
-
+            print(f'Train loss: {epoch_train_loss:.5f}')
     ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
     torch.save(policy.serialize(), ckpt_path)
     best_step, min_val_loss, best_state_dict = best_ckpt_info
-    ckpt_path = os.path.join(ckpt_dir, policy_config['backbone']+"_"+config['num_steps']+f'_step_{best_step}_best.ckpt')
+    ckpt_path = os.path.join(ckpt_dir, policy_config['backbone']+"_"+f"{config['num_steps']}"+f'_step_{best_step}_best.ckpt')
     torch.save(best_state_dict, ckpt_path)
     print(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at step {best_step}')
     return best_ckpt_info

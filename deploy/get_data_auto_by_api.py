@@ -53,62 +53,6 @@ class QposRecorder:
         return_action = self.joint_state_right[1][model]
         # print(return_action)
         return return_action
-
-#
-# key_state = False  # 按键状态：True 表示按下，False 表示松开
-#
-# # 按下按键时的回调
-# def on_press(key):
-#     global key_state
-#     # if hasattr(key, 'char') and key.char == 'w':
-#     #     print("Pressed 'w'")
-#     try:
-#         if key.char:  # 普通按键
-#             if not key_state and key.char == 'w' and hasattr(key, 'char'):  # 避免重复触发
-#                 # print("按键被按下，开始执行任务...")
-#                 posRecorder.real_right_arm.rm_set_tool_voltage(3)
-#                 print(posRecorder.real_right_arm.rm_get_tool_voltage())
-#                 key_state = True
-#     except AttributeError:
-#         # 忽略特殊按键
-#         pass
-# # 松开按键时的回调
-# def on_release(key):
-#     global key_state
-#     if key_state:  # 避免重复触发
-#         # print("\n\r\033[10G按键已松开，重置状态...", end="", flush=True)
-#         posRecorder.real_right_arm.rm_set_tool_voltage(0)
-#         print(posRecorder.real_right_arm.rm_get_tool_voltage())
-#         key_state = False
-#
-#     # 如果按下 ESC 键，退出监听
-#     if key == keyboard.Key.esc:
-#         # print("退出程序...")
-#         return False
-#
-# def wait_for_key(target_key):
-#     """
-#     等待用户按下指定按键。
-#     :param target_key: 要监听的目标按键（字符，如 's' 或特殊键 keyboard.Key.esc）
-#     """
-#     print(f"等待按下 '{target_key}' 键...")
-#
-#     def on_press(key):
-#         try:
-#             if hasattr(key, 'char') and key.char == target_key:  # 字符按键
-#                 print(f"检测到 '{target_key}' 键，继续程序...")
-#                 return False  # 停止监听
-#             elif key == target_key:  # 特殊按键
-#                 print(f"检测到特殊按键 '{target_key}'，继续程序...")
-#                 return False
-#         except AttributeError:
-#             pass  # 忽略其他按键
-#
-#     with keyboard.Listener(on_press=on_press) as listener:
-#         listener.join()  # 阻塞程序直到监听器结束
-# # 在后台启动键盘监听线程
-# listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-# listener.start()
 def read_config(config_file: str):
     global multi_device_sync_config
     with open(config_file, "r") as f:
@@ -437,7 +381,7 @@ def main(rand_pos, indx, pipelines,posRecorder, cam_display):
         for i in tqdm(range(max_timesteps)):
 
             if i==10:
-                print("开始运动")
+                print("\n开始运动")
                 move_j(posRecorder,rand_pos)
             now = time.time()
             if posRecorder.real_right_arm.rm_get_arm_current_trajectory()['trajectory_type'] == 2 and j < 1 :
@@ -453,7 +397,8 @@ def main(rand_pos, indx, pipelines,posRecorder, cam_display):
                 max_len=i-1
                 break
             image = process_frames(pipelines)
-            cam_display.enqueue_image(image)
+            if display:
+                cam_display.enqueue_image(image)
 
             angle_qpos = posRecorder.get_state()
             radius_qpos = [math.radians(j) for j in angle_qpos]
@@ -536,7 +481,7 @@ if __name__ == "__main__":
     device_list = ctx.query_devices()
     if device_list.get_count() == 0:
         print("No device connected")
-
+    display=False
     pipelines = []
     configs = []
     serial_number_list = []
@@ -585,9 +530,9 @@ if __name__ == "__main__":
     posRecorder.real_right_arm.rm_movej_p(original_pos, 14, 0, 0, 1)
     # time.sleep(1111)
     # s= time.time()
-
-    cam_display = CamDisplay()
-    cam_display.start_all_display()
+    if display:
+        cam_display = CamDisplay()
+        cam_display.start_all_display()
     # main(standard_final_pos,0, pipelines)
     # move_back(standard_final_pos)
     # time.sleep(1111)
@@ -598,7 +543,8 @@ if __name__ == "__main__":
         final = move_back(posRecorder,standard_final_pos)
         main(final,i,pipelines,posRecorder,cam_display)
     stop_streams(pipelines)
-    cam_display.stop_all_display()
+    if display:
+        cam_display.stop_all_display()
 
     end = time.time()
     print(f"total time in 1 roll:{end-start}")

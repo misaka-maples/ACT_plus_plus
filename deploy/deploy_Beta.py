@@ -20,6 +20,7 @@ from hdf5_edit import get_image_from_folder, get_top_right_image
 current_time = datetime.datetime.now()
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 STATE_NAMES = JOINT_NAMES + ["gripper"]
+camera_names = ['top', 'right_wrist','left_wrist']
 
 
 class QposRecorder:
@@ -49,10 +50,9 @@ def rand_action():
         image_dict[cam_name] = image_tensor
     return qpos_list, image_dict
 
-camera_names = ['top', 'right_wrist']
 def main(args):
-    camera_top_data, camera_right_data, qpos_list, action_ = get_state(
-        r'/home/zhnh/Documents/project/act_arm_project/temp/episode_40.hdf5')
+    camera_top_data, camera_right_data, camera_left_data, qpos_list, action_ = get_state(
+        r'/home/zhnh/Documents/project/act_arm_project/3_cam_1.2/episode_0.hdf5')
     # actions_list = []
     # qpos_list = []
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
@@ -66,9 +66,9 @@ def main(args):
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/models/v0_1_resnet18',
+        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/3_cam_1.2',
         'policy_class': 'ACT',
-        'chunk_size': 210,
+        'chunk_size': 90,
         'backbone': 'resnet18',
         'temporal_agg':True,
         'max_timesteps': loop_len,
@@ -85,6 +85,7 @@ def main(args):
         image_dict = {
             'top': camera_top_data[i],
             'right_wrist': camera_right_data[i],
+            'left_wrist': camera_left_data[i],
         }
         # print(image_dict)
         if args['joint_true'] is True:

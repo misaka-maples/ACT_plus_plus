@@ -45,6 +45,7 @@ def get_state(file_path):
             # top_paths = [path for path in data if 'top' in path]            # 检查是否存在原始的路径
             top_paths = [path for path in data if 'top' in path or 'high' in path]
             right_paths = [path for path in data if 'right' in path]
+            left_paths = [path for path in data if 'left' in path]
             qpos_paths = [path for path in data if 'qpos' in path]
             action_paths = [path for path in data if 'action' in path]
             # print(top)
@@ -57,41 +58,54 @@ def get_state(file_path):
             right = right_paths[0]  # 如果有多个 'right'，只取第一个
             qpos = qpos_paths[0]  # 如果有多个 'qpos'，只取第一个
             action = action_paths[0]  # 如果有多个 'action'，只取第一个
-
+            left = left_paths[0]
             if top not in f:
                 raise KeyError(f"Path '{top}' not found in the HDF5 file.")
             if right not in f:
                 raise KeyError(f"Path '{right}' not found in the HDF5 file.")
+            if left not in f:
+                raise KeyError(f"Path '{left}' not found in the HDF5 file.")
+
             if qpos not in f:
                 raise KeyError(f"Path '{qpos}' not found in the HDF5 file.")
             if action not in f:
                 raise KeyError(f"Path '{action}' not found in the HDF5 file.")
             camera_top_data = f[top][:]
             camera_right_data = f[right][:]
+            camera_left_data = f[left][:]
             qpos = f[qpos][:]
             action = f[action][:]
             camera_top_data_list = []  # 用于存储解压后的帧
             camera_right_data_list = []
+            camera_left_data_list = []
             if compressed:
                 num_images = camera_top_data.shape[0]
 
                 for i in range(num_images):
                     compressed_image = camera_top_data[i]
                     compressed_image_ = camera_right_data[i]
+                    compressed_image__ = camera_left_data[i]
+
                     # 解压为彩色图像
                     decompressed_image = cv2.imdecode(compressed_image, 1)
                     decompressed_image_ = cv2.imdecode(compressed_image_, 1)
+                    decompressed_image__ = cv2.imdecode(compressed_image__, 1)
+
                     # 确保通道顺序是 BGR
                     # decompressed_image = cv2.cvtColor(decompressed_image, cv2.COLOR_RGB2BGR)
                     # image_list.append(decompressed_image)
                     camera_top_data_list.append(decompressed_image)
                     camera_right_data_list.append(decompressed_image_)
+                    camera_left_data_list.append(decompressed_image__)
+
             else:
                 camera_top_data_list = camera_top_data
                 camera_right_data_list = camera_right_data
+                camera_left_data_list = camera_left_data
+
     except Exception as e:
         print(f"Error load hdf5 file:\n {e}")
-    return camera_top_data_list, camera_right_data_list, qpos, action
+    return camera_top_data_list, camera_right_data_list, camera_left_data_list, qpos, action
 
 
 #用于修改hdf5文件，再写入文件
@@ -184,6 +198,13 @@ def modify_hdf5(file_path, compress=None, truncate_ranges=None, edit=False):
                 else:
                     print(
                         f"\ncamera_top_data is already in the correct shape, skipping decompression.shape{camera_top_data.shape}")
+                if camera_left_data.shape[1:] != (480, 640, 3):
+                    if compress:
+                        camera_left_data = decompress_images(camera_left_data)
+                        print(camera_left_data.shape)
+                else:
+                    print(
+                        f"\ncamera_left_data is already in the correct shape, skipping decompression.shape{camera_left_data.shape}")
 
                 if camera_top_data.shape[1:] == (480, 640, 3) and camera_right_data.shape[1:] == (480, 640, 3):
                     f.attrs['compress'] = False
@@ -514,11 +535,11 @@ if __name__ == '__main__':
     #     'right_wrist': (45, 100),
     #     'qpos': (45, 100),
     # }
-    modify_hdf5('/home/zhnh/Documents/project/act_arm_project/3_cam_1.2/episode_0.hdf5', compress=False)
+    modify_hdf5('/home/zhnh/Documents/project/act_arm_project/3_cam_1.2/episode_0.hdf5', compress=False,edit=True)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # for i in range(32,53):
-    save_video(r'/home/zhnh/Documents/project/act_arm_project/3_cam_1.2', fps=30, i=0,arm='right')
+    save_video(r'/home/zhnh/Documents/project/act_arm_project/3_cam_1.2', fps=20, i=1,arm='right')
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀

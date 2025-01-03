@@ -44,7 +44,7 @@ class ActionGenerator:
             'enc_layers': 4,
             'dec_layers': 7,
             'nheads': 8,
-            'camera_names': ['top', 'right_wrist'],
+            'camera_names': ['top', 'right_wrist', 'left_wrist'],
             # 'vq': args['use_vq'],
 
             'action_dim': 9,

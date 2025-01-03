@@ -4,9 +4,10 @@ import os
 ### Task parameters
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 
-DATA_DIR = 'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_model'
-# DATA_DIR = r"/home/zhnh/Documents/project/act_arm_project/hdf5_files"
-HDF5_DIR = DATA_DIR + r'/save_dir'
+# DATA_DIR = 'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_model'
+DATA_DIR = r"/home/zhnh/Documents/project/act_arm_project/3_cam_1.2"
+HDF5_DIR = DATA_DIR
+EVERY=1000
 SIM_TASK_CONFIGS = {
     'sim_transfer_cube_scripted': {
         'dataset_dir': DATA_DIR,
@@ -49,7 +50,6 @@ SIM_TASK_CONFIGS = {
         'episode_len': 400,
         'camera_names': ['top', 'left_wrist', 'right_wrist']
     },
-
     'sim_insertion_scripted_mirror': {
         'dataset_dir': DATA_DIR + '/sim_insertion_scripted_mirror',
         'num_episodes': None,
@@ -66,24 +66,24 @@ RIGHT_ARM_TASK_CONFIGS = {
         'task_name': 'right_arm_train',
         'batch_size': 8,
         'seed': 0,
-        'num_steps': 25000,
+        'num_steps': 20000,
         'lr': 1e-5,
         'num_episodes': None,
         'episode_len': 400,
-        'camera_names': ['top', 'right_wrist'],
-        'chunk_size': 210,
+        'camera_names': ['top', 'right_wrist','left_wrist'],
+        'chunk_size': 90,
         'hidden_dim': 512,
         'dim_feedforward': 3200,
         'kl_weight': 10,
-        'eval_every': 500,
-        'save_every': 500,
-        'validate_every': 500,
+        'eval_every': EVERY,
+        'save_every': EVERY,
+        'validate_every': EVERY,
         'load_pretrain': False,
         'resume_ckpt_path': DATA_DIR + 'policy_best.ckpt',
-        'loss_save_every': 500,
+        'loss_save_every': EVERY,
         'eval': False,
-        'new_loss': True,
-        'backbone': 'resnet34',
+        'new_loss': False,
+        'backbone': 'resnet18',
         'qpos_noise_std': 0,
         'dropout': 0.3,
         'train_ratio': 0.95,

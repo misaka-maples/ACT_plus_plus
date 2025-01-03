@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 import time
 from queue import Queue
 from threading import Lock
@@ -10,14 +11,16 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 from pyorbbecsdk import *
-from utils import frame_to_bgr_image
+
+from deploy.remote_control import posRecorder
+# from utils import frame_to_bgr_image
 # from pynput.keyboard import Listener, Key
 from pynput import keyboard
 import random
 frames_queue_lock = Lock()
 
 # Configuration settings
-MAX_DEVICES = 2
+MAX_DEVICES = 3
 MAX_QUEUE_SIZE = 2
 ESC_KEY = 27
 save_points_dir = os.path.join(os.getcwd(), "point_clouds")
@@ -31,12 +34,12 @@ curr_device_cnt = 0
 # Load config file for multiple devices
 config_file_path = os.path.join(os.path.dirname(__file__), "/home/zhnh/Documents/project/act_arm_project/pyorbbecsdk-main/config/multi_device_sync_config.json")
 multi_device_sync_config = {}
-camera_names = ['top', 'right_wrist']
+camera_names = ['top', 'right_wrist','left_wrist']
+#是位置姿态不是关节值
 zero_pos = [0, 0, 0.8505, 0, 0, 3.14]
-original_pos =[-0.383979, 0.164255, 0.584912, 1.682, 1.083, -1.421]
-final_pos = [-0.426444, 0.337119, 0.251157, 2.559, 0.818, -0.857]
-standard_final_pos = [-0.295032, 0.342069, 0.462651, 1.606, 0.998, -1.569]
-
+original_pos = [-0.344476, 0.146943, 0.619547, 1.722, 1.129, -1.437]
+final_pos = [-0.344879, 0.342856, 0.24035, 2.725, 0.781, -0.658]
+standard_final_pos = [-0.269835, 0.342173, 0.464594, 2.105, 1.046, -1.163]
 
 class QposRecorder:
     def __init__(self):
@@ -44,68 +47,68 @@ class QposRecorder:
         self.real_right_arm = (RoboticArm(rm_thread_mode_e.RM_TRIPLE_MODE_E))
         self.arm_ini = self.real_right_arm.rm_create_robot_arm("192.168.1.18",8080, level=3)
         # self.robot_controller = RoboticArm("192.168.1.18", 8080, 3)
-    def get_state(self):
+    def get_state(self, model='joint'):
         self.joint_state_right = self.real_right_arm.rm_get_current_arm_state()
         # print(f"get state test", self.joint_state_right)
-        return_action = self.joint_state_right[1]['joint']
+        return_action = self.joint_state_right[1][model]
         # print(return_action)
         return return_action
-posRecorder = QposRecorder()
 
-key_state = False  # 按键状态：True 表示按下，False 表示松开
-
-# 按下按键时的回调
-def on_press(key):
-    global key_state
-    # if hasattr(key, 'char') and key.char == 'w':
-    #     print("Pressed 'w'")
-    try:
-        if key.char:  # 普通按键
-            if not key_state and key.char == 'w' and hasattr(key, 'char'):  # 避免重复触发
-                # print("按键被按下，开始执行任务...")
-                posRecorder.real_right_arm.rm_set_tool_voltage(3)
-                print(posRecorder.real_right_arm.rm_get_tool_voltage())
-                key_state = True
-    except AttributeError:
-        # 忽略特殊按键
-        pass
-# 松开按键时的回调
-def on_release(key):
-    global key_state
-    if key_state:  # 避免重复触发
-        # print("\n\r\033[10G按键已松开，重置状态...", end="", flush=True)
-        posRecorder.real_right_arm.rm_set_tool_voltage(0)
-        print(posRecorder.real_right_arm.rm_get_tool_voltage())
-        key_state = False
-
-    # 如果按下 ESC 键，退出监听
-    if key == keyboard.Key.esc:
-        # print("退出程序...")
-        return False
-
-def wait_for_key(target_key):
-    """
-    等待用户按下指定按键。
-    :param target_key: 要监听的目标按键（字符，如 's' 或特殊键 keyboard.Key.esc）
-    """
-    print(f"等待按下 '{target_key}' 键...")
-
-    def on_press(key):
-        try:
-            if hasattr(key, 'char') and key.char == target_key:  # 字符按键
-                print(f"检测到 '{target_key}' 键，继续程序...")
-                return False  # 停止监听
-            elif key == target_key:  # 特殊按键
-                print(f"检测到特殊按键 '{target_key}'，继续程序...")
-                return False
-        except AttributeError:
-            pass  # 忽略其他按键
-
-    with keyboard.Listener(on_press=on_press) as listener:
-        listener.join()  # 阻塞程序直到监听器结束
-# 在后台启动键盘监听线程
-listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-listener.start()
+#
+# key_state = False  # 按键状态：True 表示按下，False 表示松开
+#
+# # 按下按键时的回调
+# def on_press(key):
+#     global key_state
+#     # if hasattr(key, 'char') and key.char == 'w':
+#     #     print("Pressed 'w'")
+#     try:
+#         if key.char:  # 普通按键
+#             if not key_state and key.char == 'w' and hasattr(key, 'char'):  # 避免重复触发
+#                 # print("按键被按下，开始执行任务...")
+#                 posRecorder.real_right_arm.rm_set_tool_voltage(3)
+#                 print(posRecorder.real_right_arm.rm_get_tool_voltage())
+#                 key_state = True
+#     except AttributeError:
+#         # 忽略特殊按键
+#         pass
+# # 松开按键时的回调
+# def on_release(key):
+#     global key_state
+#     if key_state:  # 避免重复触发
+#         # print("\n\r\033[10G按键已松开，重置状态...", end="", flush=True)
+#         posRecorder.real_right_arm.rm_set_tool_voltage(0)
+#         print(posRecorder.real_right_arm.rm_get_tool_voltage())
+#         key_state = False
+#
+#     # 如果按下 ESC 键，退出监听
+#     if key == keyboard.Key.esc:
+#         # print("退出程序...")
+#         return False
+#
+# def wait_for_key(target_key):
+#     """
+#     等待用户按下指定按键。
+#     :param target_key: 要监听的目标按键（字符，如 's' 或特殊键 keyboard.Key.esc）
+#     """
+#     print(f"等待按下 '{target_key}' 键...")
+#
+#     def on_press(key):
+#         try:
+#             if hasattr(key, 'char') and key.char == target_key:  # 字符按键
+#                 print(f"检测到 '{target_key}' 键，继续程序...")
+#                 return False  # 停止监听
+#             elif key == target_key:  # 特殊按键
+#                 print(f"检测到特殊按键 '{target_key}'，继续程序...")
+#                 return False
+#         except AttributeError:
+#             pass  # 忽略其他按键
+#
+#     with keyboard.Listener(on_press=on_press) as listener:
+#         listener.join()  # 阻塞程序直到监听器结束
+# # 在后台启动键盘监听线程
+# listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+# listener.start()
 def read_config(config_file: str):
     global multi_device_sync_config
     with open(config_file, "r") as f:
@@ -320,7 +323,7 @@ def button():
 
     # 主循环
     root.mainloop()
-def move_j(rand_pos):
+def move_j(posRecorder,rand_pos):
     posRecorder.real_right_arm.rm_set_tool_voltage(3)
 
     queue_action=[original_pos, final_pos, rand_pos]
@@ -341,7 +344,7 @@ def move_j(rand_pos):
     # print(temp_)
     posRecorder.real_right_arm.rm_movej_p(temp_, 14, 0, 1, 0)
     posRecorder.real_right_arm.rm_movej_p(queue_action[0],14, 0, 0, 0)
-def move_back(rand_):
+def move_back(posRecorder,rand_):
     print("move_back_to_origin_position")
     rand_position = rand_pos(rand_,0.05)
     # print(final_pos)
@@ -369,7 +372,55 @@ def move_back(rand_):
     posRecorder.real_right_arm.rm_movej_p(original_pos, v, 0, 0, 1)
     return rand_position
 
-def main(rand_pos, indx, pipelines):
+def frame_to_bgr_image(frame):
+
+    width = frame.get_width()
+    height = frame.get_height()
+    color_format = frame.get_format()
+    data = np.asanyarray(frame.get_data())
+    image = np.zeros((height, width, 3), dtype=np.uint8)
+    if color_format == OBFormat.RGB:
+        image = np.resize(data, (height, width, 3))
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    elif color_format == OBFormat.MJPG:
+        image = cv2.imdecode(data, cv2.IMREAD_COLOR)
+
+    else:
+        print("Unsupported color format: {}".format(color_format))
+        return None
+
+    return image
+class CamDisplay:
+    def __init__(self):
+        self._image_queue = Queue()
+        self._display_width = 1860
+        self._display_height = 480
+
+        print("Cam display init success!")
+
+    def enqueue_image(self, img):
+        img_list = []
+        for key, value in img.items():
+            img_list.append(value)
+        img_queue_item = np.hstack(img_list)
+        self._image_queue.put(img_queue_item)
+
+    def display_all(self):
+        while True:
+            if not self._image_queue.empty():
+                hstack_img = self._image_queue.get()
+                resized_img = cv2.resize(hstack_img, (self._display_width, self._display_height))
+                cv2.imshow("cam_view", resized_img)
+                cv2.waitKey(1)
+
+    def start_all_display(self):
+        self._cam_view_thread = threading.Thread(target=self.display_all)
+        self._cam_view_thread.start()
+
+    def stop_all_display(self):
+        self._cam_view_thread.join()
+
+def main(rand_pos, indx, pipelines,posRecorder, cam_display):
     qpos_list = []
     get_image_number = 0
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
@@ -379,13 +430,15 @@ def main(rand_pos, indx, pipelines):
         now = time.time()
         for i in range(30):
             image = process_frames(pipelines)
+        print(f"预热结束")
         drop_time  = time.time()
         j=0
         first_trajectory = False
         for i in tqdm(range(max_timesteps)):
 
-            if i==60:
-                move_j(rand_pos)
+            if i==10:
+                print("开始运动")
+                move_j(posRecorder,rand_pos)
             now = time.time()
             if posRecorder.real_right_arm.rm_get_arm_current_trajectory()['trajectory_type'] == 2 and j < 1 :
                 posRecorder.real_right_arm.rm_set_tool_voltage(3)
@@ -400,6 +453,8 @@ def main(rand_pos, indx, pipelines):
                 max_len=i-1
                 break
             image = process_frames(pipelines)
+            cam_display.enqueue_image(image)
+
             angle_qpos = posRecorder.get_state()
             radius_qpos = [math.radians(j) for j in angle_qpos]
             radius_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
@@ -411,9 +466,9 @@ def main(rand_pos, indx, pipelines):
                 images_dict['top'].append(cv2.resize(image[0], (640, 480)))
                 images_dict['right_wrist'].append(cv2.resize(image[1], (640, 480)))
             elif curr_device_cnt ==3 and 'CP1L44P0006E' in serial_number_list and 'CP1E54200056' in serial_number_list and 'CP1L44P0004Y' in serial_number_list:
-                images_dict['top'].append(cv2.resize(image[1], (640, 480)))
+                images_dict['top'].append(cv2.resize(image[2], (640, 480)))
                 images_dict['right_wrist'].append(cv2.resize(image[0], (640, 480)))
-                images_dict['left_wrist'].append(cv2.resize(image[2], (640, 480)))
+                images_dict['left_wrist'].append(cv2.resize(image[1], (640, 480)))
 
             else:
                 raise "device error"
@@ -468,7 +523,7 @@ def main(rand_pos, indx, pipelines):
             joints_nums=7,
             episode_idx=indx,
             data_dict=data_dict,
-            reshape_hdf5_path='../temp'
+            reshape_hdf5_path='../3_cam_1.2'
         )
         # 确保监听器线程被正确关闭
         # listener_thread.join()
@@ -492,26 +547,26 @@ if __name__ == "__main__":
         config = Config()
         serial_number = device.get_device_info().get_serial_number()
         serial_number_list.append(serial_number)
-        sync_config_json = multi_device_sync_config[serial_number]
-        sync_config = device.get_multi_device_sync_config()
-        sync_config.mode = sync_mode_from_str(sync_config_json["config"]["mode"])
-        sync_config.color_delay_us = sync_config_json["config"]["color_delay_us"]
-        sync_config.depth_delay_us = sync_config_json["config"]["depth_delay_us"]
-        sync_config.trigger_out_enable = sync_config_json["config"]["trigger_out_enable"]
-        sync_config.trigger_out_delay_us = sync_config_json["config"]["trigger_out_delay_us"]
-        sync_config.frames_per_trigger = sync_config_json["config"]["frames_per_trigger"]
-        device.set_multi_device_sync_config(sync_config)
-        print(f"Device {serial_number} sync config: {sync_config}")
+        # sync_config_json = multi_device_sync_config[serial_number]
+        # sync_config = device.get_multi_device_sync_config()
+        # sync_config.mode = sync_mode_from_str(sync_config_json["config"]["mode"])
+        # sync_config.color_delay_us = sync_config_json["config"]["color_delay_us"]
+        # sync_config.depth_delay_us = sync_config_json["config"]["depth_delay_us"]
+        # sync_config.trigger_out_enable = sync_config_json["config"]["trigger_out_enable"]
+        # sync_config.trigger_out_delay_us = sync_config_json["config"]["trigger_out_delay_us"]
+        # sync_config.frames_per_trigger = sync_config_json["config"]["frames_per_trigger"]
+        # device.set_multi_device_sync_config(sync_config)
+        # print(f"Device {serial_number} sync config: {sync_config}")
 
         profile_list = pipeline.get_stream_profile_list(OBSensorType.COLOR_SENSOR)
         color_profile = profile_list.get_default_video_stream_profile()
         config.enable_stream(color_profile)
-        print(f"Device {serial_number} color profile: {color_profile}")
-
-        profile_list = pipeline.get_stream_profile_list(OBSensorType.DEPTH_SENSOR)
-        depth_profile = profile_list.get_default_video_stream_profile()
-        print(f"Device {serial_number} depth profile: {depth_profile}")
-        config.enable_stream(depth_profile)
+        # print(f"Device {serial_number} color profile: {color_profile}")
+        #
+        # profile_list = pipeline.get_stream_profile_list(OBSensorType.DEPTH_SENSOR)
+        # depth_profile = profile_list.get_default_video_stream_profile()
+        # print(f"Device {serial_number} depth profile: {depth_profile}")
+        # config.enable_stream(depth_profile)
         pipelines.append(pipeline)
         configs.append(config)
     # max_timesteps = 400
@@ -525,21 +580,25 @@ if __name__ == "__main__":
     # threading.Event().wait(0.1)
     pre_time = time.time()
     # button()
+    posRecorder = QposRecorder()
     posRecorder.real_right_arm.rm_set_arm_delete_trajectory()
     posRecorder.real_right_arm.rm_movej_p(original_pos, 14, 0, 0, 1)
     # time.sleep(1111)
     # s= time.time()
 
+    cam_display = CamDisplay()
+    cam_display.start_all_display()
     # main(standard_final_pos,0, pipelines)
     # move_back(standard_final_pos)
     # time.sleep(1111)
 
     for i in range(20):
-        print(f"i:{i+32}")
+        print(f"i:{i}")
         # print(posRecorder.real_right_arm.rm_get_tool_voltage())
-        final = move_back(standard_final_pos)
-        main(final,i+32,pipelines)
+        final = move_back(posRecorder,standard_final_pos)
+        main(final,i,pipelines,posRecorder,cam_display)
     stop_streams(pipelines)
+    cam_display.stop_all_display()
 
     end = time.time()
     print(f"total time in 1 roll:{end-start}")

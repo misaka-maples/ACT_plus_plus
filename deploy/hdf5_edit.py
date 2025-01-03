@@ -95,7 +95,7 @@ def get_state(file_path):
 
 
 #用于修改hdf5文件，再写入文件
-def modify_hdf5(file_path, compress=None, truncate_ranges=None):
+def modify_hdf5(file_path, compress=None, truncate_ranges=None, edit=False):
     """
     修改 HDF5 文件中的摄像头数据，并在指定位置截断数据。
 
@@ -111,11 +111,15 @@ def modify_hdf5(file_path, compress=None, truncate_ranges=None):
     """
     try:
         with h5py.File(file_path, 'r+') as f:
+            path_collection = []
             # 检查是否存在原始的路径
             data = get_key(file_path)
+            for p in data:
+                print(f"已经存在的路径",p)
             # top_paths = [path for path in data if 'top' in path]            # 检查是否存在原始的路径
             top_paths = [path for path in data if 'top' in path or 'high' in path]
             right_paths = [path for path in data if 'right' in path]
+            left_paths = [path for path in data if 'left' in path]
             qpos_paths = [path for path in data if 'qpos' in path]
             action_paths = [path for path in data if 'action' in path]
             # print(top)
@@ -128,11 +132,13 @@ def modify_hdf5(file_path, compress=None, truncate_ranges=None):
             right = right_paths[0]  # 如果有多个 'right'，只取第一个
             qpos = qpos_paths[0]  # 如果有多个 'qpos'，只取第一个
             action = action_paths[0]  # 如果有多个 'action'，只取第一个
-
+            left = left_paths[0]
             if top not in f:
                 raise KeyError(f"Path '{top}' not found in the HDF5 file.")
             if right not in f:
                 raise KeyError(f"Path '{right}' not found in the HDF5 file.")
+            if left not in f:
+                raise KeyError(f"Path '{left}' not found in the HDF5 file.")
             if qpos not in f:
                 raise KeyError(f"Path '{qpos}' not found in the HDF5 file.")
             if action not in f:
@@ -141,95 +147,107 @@ def modify_hdf5(file_path, compress=None, truncate_ranges=None):
             # 获取原始数据
             camera_top_data = f[top][:]
             camera_right_data = f[right][:]
+            camera_left_data = f[left][:]
             qpos = f[qpos][:]
             actions = f[action][:]
-            print(qpos[0])
+            # print(qpos[0])
             # print(f"camera_top_data.shape: {camera_top_data.shape}, camera_right_data.shape: {camera_right_data.shape}")
+            if edit:
+                # 解压逻辑
+                def decompress_images(compressed_data):
+                    """解压图像数据"""
+                    image_list = []
+                    num_images = compressed_data.shape[0]
+                    for i in range(num_images):
+                        compressed_image = compressed_data[i]
+                        # 解压为彩色图像
+                        decompressed_image = cv2.imdecode(compressed_image, cv2.IMREAD_COLOR)
+                        if decompressed_image is None:
+                            raise ValueError("Failed to decompress image. Data might not be valid compressed format.")
+                        image_list.append(decompressed_image)
 
-            # 解压逻辑
-            def decompress_images(compressed_data):
-                """解压图像数据"""
-                image_list = []
-                num_images = compressed_data.shape[0]
-                for i in range(num_images):
-                    compressed_image = compressed_data[i]
-                    # 解压为彩色图像
-                    decompressed_image = cv2.imdecode(compressed_image, cv2.IMREAD_COLOR)
-                    if decompressed_image is None:
-                        raise ValueError("Failed to decompress image. Data might not be valid compressed format.")
-                    image_list.append(decompressed_image)
+                    return np.array(image_list)
 
-                return np.array(image_list)
+                    # 判断是否需要解压，如果图像维度是 (num_images, 480, 640, 3)，则不进行解压
 
-                # 判断是否需要解压，如果图像维度是 (num_images, 480, 640, 3)，则不进行解压
+                if camera_right_data.shape[1:] != (480, 640, 3):
+                    if compress:
+                        camera_right_data = decompress_images(camera_right_data)
+                        print(camera_right_data.shape)
+                else:
+                    print(
+                        f"\ncamera_right_data is already in the correct shape, skipping decompression.shape{camera_right_data.shape}")
+                if camera_top_data.shape[1:] != (480, 640, 3):
+                    if compress:
+                        camera_top_data = decompress_images(camera_top_data)
+                        print(camera_top_data.shape)
+                else:
+                    print(
+                        f"\ncamera_top_data is already in the correct shape, skipping decompression.shape{camera_top_data.shape}")
 
-            if camera_right_data.shape[1:] != (480, 640, 3):
-                if compress:
-                    camera_right_data = decompress_images(camera_right_data)
-                    print(camera_right_data.shape)
-            else:
-                print(f"\ncamera_right_data is already in the correct shape, skipping decompression.shape{camera_right_data.shape}")
-            if camera_top_data.shape[1:] != (480, 640, 3):
-                if compress:
-                    camera_top_data = decompress_images(camera_top_data)
-                    print(camera_top_data.shape)
-            else:
-                print(f"\ncamera_right_data is already in the correct shape, skipping decompression.shape{camera_top_data.shape}")
-            if camera_top_data.shape[1:] == (480, 640, 3) and camera_right_data.shape[1:] == (480, 640, 3):
-                f.attrs['compress'] = False
-            # camera_top_data = decompress_images(camera_top_data)
-            qpos = qpos[:, :7]
-            actions = actions[:, :7]
+                if camera_top_data.shape[1:] == (480, 640, 3) and camera_right_data.shape[1:] == (480, 640, 3):
+                    f.attrs['compress'] = False
+                # camera_top_data = decompress_images(camera_top_data)
+                qpos = qpos[:, :7]
+                actions = actions[:, :7]
 
-            # 截断数据，如果指定了截断范围
-            def truncate_data(data, key):
-                """根据指定的截断范围进行截断"""
-                if truncate_ranges and key in truncate_ranges:
-                    start, end = truncate_ranges[key]
-                    print(f"Truncating {key} from {start} to {end}")
-                    return data[start:end]
-                return data
+                # 截断数据，如果指定了截断范围
+                def truncate_data(data, key):
+                    """根据指定的截断范围进行截断"""
+                    if truncate_ranges and key in truncate_ranges:
+                        start, end = truncate_ranges[key]
+                        print(f"Truncating {key} from {start} to {end}")
+                        return data[start:end]
+                    return data
 
-            camera_top_data = truncate_data(camera_top_data, 'top')
-            camera_right_data = truncate_data(camera_right_data, 'right_wrist')
-            qpos = truncate_data(qpos, 'qpos')
-            actions = truncate_data(actions, 'action')
+                camera_top_data = truncate_data(camera_top_data, 'top')
+                camera_right_data = truncate_data(camera_right_data, 'right_wrist')
+                camera_left_data = truncate_data(camera_left_data, 'left_wrist')
+                qpos = truncate_data(qpos, 'qpos')
+                actions = truncate_data(actions, 'action')
 
-            # 创建新的路径并写入数据
-            new_paths_top = ['observations/images/top']
-            new_paths_right = ['observations/images/right_wrist']
-            new_qpos_path = ['observations/qpos']
-            new_actions_path = ['action']
+                # 创建新的路径并写入数据
+                new_paths_top = ['observations/images/top']
+                new_paths_right = ['observations/images/right_wrist']
+                new_paths_left = ['observations/images/left_wrist']
+                new_qpos_path = ['observations/qpos']
+                new_actions_path = ['action']
 
-            for path in new_actions_path:
-                if path in f:
-                    del f[path]
-                f.create_dataset(path, data=actions)
+                for path in new_actions_path:
+                    if path in f:
+                        del f[path]
+                    f.create_dataset(path, data=actions)
 
-            for path in new_qpos_path:
-                if path in f:
-                    del f[path]
-                f.create_dataset(path, data=qpos)
+                for path in new_qpos_path:
+                    if path in f:
+                        del f[path]
+                    f.create_dataset(path, data=qpos)
 
-            for path in new_paths_top:
-                if path in f:
-                    del f[path]
-                f.create_dataset(path, data=camera_top_data)
+                for path in new_paths_top:
+                    if path in f:
+                        del f[path]
+                    f.create_dataset(path, data=camera_top_data)
 
-            for path in new_paths_right:
-                if path in f:
-                    del f[path]
-                f.create_dataset(path, data=camera_right_data)
+                for path in new_paths_right:
+                    if path in f:
+                        del f[path]
+                    f.create_dataset(path, data=camera_right_data)
+                for path in new_paths_left:
+                    if path in f:
+                        del f[path]
+                    f.create_dataset(path, data=camera_left_data)
 
-            print("Modification complete. Paths updated:")
-            for path in new_paths_top:
-                print(f"  - {path}")
-            for path in new_paths_right:
-                print(f"  - {path}")
-            for path in new_qpos_path:
-                print(f"  - {path}")
-            for path in new_actions_path:
-                print(f"  - {path}")
+                print("Modification complete. Paths updated:")
+                for path in new_paths_top:
+                    print(f"  - {path}")
+                for path in new_paths_right:
+                    print(f"  - {path}")
+                for path in new_paths_left:
+                    print(f"  - {path}")
+                for path in new_qpos_path:
+                    print(f"  - {path}")
+                for path in new_actions_path:
+                    print(f"  - {path}")
 
             print(f'compress:', f.attrs.get('compress'))
     except Exception as e:
@@ -262,28 +280,35 @@ def batch_modify_hdf5(dataset_dir, output_dir=None, skip_mirrored_data=True):
 rand = random.random()
 
 
-def save_video(file_path, fps=10, i=0):
+def save_video(file_path, fps=10, i=0, arm='right_wrist'):
     dataset_path = os.path.join(file_path, f'episode_{i}' + '.hdf5')
     try:
         with h5py.File(dataset_path, 'r') as f:
-            print(f.keys())
+            # print(f.keys())
             right_image_path = 'observations/images/right_wrist'
             if right_image_path not in f:
                 raise KeyError(f"Path '{right_image_path}' not found in the HDF5 file.")
             top_image_path = 'observations/images/top'
             if top_image_path not in f:
                 raise KeyError(f"Path '{top_image_path}' not found in the HDF5 file.")
-
-
+            left_image_path='observations/images/left_wrist'
+            if top_image_path not in f:
+                raise KeyError(f"Path '{left_image_path}' not found in the HDF5 file.")
             right_wrist_data = f[right_image_path][()]  # 读取图像数据
             top_data = f[top_image_path][()]  # 读取图像数据
+            left_data = f[left_image_path][()]
             compressed = f.attrs.get('compress', False)
-
+            if 'right' in arm:
+                arm_data = right_wrist_data
+            elif 'top' in arm:
+                arm_data = top_data
+            elif 'left' in arm:
+                arm_data = left_data
             image_list = []  # 用于存储解压后的帧
             if compressed:
-                num_images = right_wrist_data.shape[0]
+                num_images = arm_data.shape[0]
                 for i in range(num_images):
-                    compressed_image = right_wrist_data[i]
+                    compressed_image = arm_data[i]
                     # 解压为彩色图像
                     decompressed_image = cv2.imdecode(compressed_image, 1)
                     # 确保通道顺序是 BGR
@@ -292,9 +317,9 @@ def save_video(file_path, fps=10, i=0):
                     image_list.append(decompressed_image)
             else:
                 # 假设数据直接是未压缩图像数组
-                image_list = [frame for frame in right_wrist_data]
+                image_list = [frame for frame in arm_data]
             print(os.path.splitext(os.path.basename(dataset_path))[0])
-            output_path = os.path.join(file_path, f"frame_{os.path.splitext(os.path.basename(dataset_path))[0]}.jpg")
+            output_path = os.path.join(file_path, f"frame_{os.path.splitext(os.path.basename(dataset_path))[0]}_"+arm+".jpg")
 
             # for i in range(len(image_list)):
             # print(f"image_list_len:{len(image_list)}")
@@ -309,7 +334,7 @@ def save_video(file_path, fps=10, i=0):
 
             # 定义视频写入器
 
-            path = os.path.join(file_path, f"frame_{os.path.splitext(os.path.basename(dataset_path))[0]}.mp4")
+            path = os.path.join(file_path, f"frame_{os.path.splitext(os.path.basename(dataset_path))[0]}_"+arm+".mp4")
             video_writer = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (frame_width, frame_height))
 
             # 将每一帧写入视频
@@ -320,8 +345,10 @@ def save_video(file_path, fps=10, i=0):
 
             # 释放视频写入器
             video_writer.release()
-            print(f"\nVideo saved successfully at {file_path}")
-
+            if os.path.exists(path):
+                print(f"\nVideo saved successfully at {file_path}")
+            else:
+                raise "error to save video"
     except Exception as e:
 
         print(f"Error saving video:\n {e}")
@@ -487,11 +514,11 @@ if __name__ == '__main__':
     #     'right_wrist': (45, 100),
     #     'qpos': (45, 100),
     # }
-    # modify_hdf5('/home/zhnh/Documents/project/act_arm_project/hdf5_files/Isaac_hdf5/episode_1.hdf5', compress=True)
+    modify_hdf5('/home/zhnh/Documents/project/act_arm_project/3_cam_1.2/episode_0.hdf5', compress=False)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
-    for i in range(32,53):
-        save_video(r'/home/zhnh/Documents/project/act_arm_project/temp', fps=30, i=i)
+    # for i in range(32,53):
+    save_video(r'/home/zhnh/Documents/project/act_arm_project/3_cam_1.2', fps=30, i=0,arm='right')
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀

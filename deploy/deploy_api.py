@@ -19,7 +19,7 @@ frames_queue_lock = Lock()
 import datetime
 
 # Configuration settings
-MAX_DEVICES = 2
+MAX_DEVICES = 3
 MAX_QUEUE_SIZE = 2
 ESC_KEY = 27
 save_points_dir = os.path.join(os.getcwd(), "point_clouds")
@@ -181,7 +181,7 @@ def main():
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
         'task_name': 'train',
-        'ckpt_dir': '/home/zhnh/Documents/project/act_arm_project/temp',
+        'ckpt_dir': '/home/zhnh/Documents/project/act_arm_project/models/1224_resnet18',
         'ckpt_name': "policy_best.ckpt",
         'policy_class': 'ACT',
         'chunk_size': 210,
@@ -226,7 +226,7 @@ def main():
             qpos_list_.append(ActionGenerator1.qpos_list)
             actions_list.append(actions)
             power = actions[6]
-            print(power,step_caculate-now, step_caculate - start)
+            print(f"电磁铁：",power)
             actions = [math.degrees(i) for i in actions[:6]]
             print(f":---------------------------------------actions--------------------"
                   f"--------------------------:\n{actions}")

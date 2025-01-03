@@ -8,17 +8,37 @@ from Robotic_Arm.rm_robot_interface import *
 import math, h5py
 import cv2
 import numpy as np
-from setuptools.command.setopt import edit_config
+
 from tqdm import tqdm
 from pyorbbecsdk import *
-from utils import frame_to_bgr_image
-# from pynput.keyboard import Listener, Key
+# from utils import frame_to_bgr_image
+#
 from pynput import keyboard
+import threading
 
 frames_queue_lock = Lock()
 
+def frame_to_bgr_image(frame):
+
+    width = frame.get_width()
+    height = frame.get_height()
+    color_format = frame.get_format()
+    data = np.asanyarray(frame.get_data())
+    image = np.zeros((height, width, 3), dtype=np.uint8)
+    if color_format == OBFormat.RGB:
+        image = np.resize(data, (height, width, 3))
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    elif color_format == OBFormat.MJPG:
+        image = cv2.imdecode(data, cv2.IMREAD_COLOR)
+
+    else:
+        print("Unsupported color format: {}".format(color_format))
+        return None
+
+    return image
+
 # Configuration settings
-MAX_DEVICES = 2
+MAX_DEVICES = 3
 MAX_QUEUE_SIZE = 2
 ESC_KEY = 27
 save_points_dir = os.path.join(os.getcwd(), "point_clouds")
@@ -34,6 +54,39 @@ config_file_path = os.path.join(os.path.dirname(__file__), "/home/zhnh/Documents
 multi_device_sync_config = {}
 camera_names = ['top', 'right_wrist','left_wrist']
 
+
+class CamDisplay:
+    def __init__(self):
+        self._image_queue = Queue()
+        self._display_width = 1860
+        self._display_height = 480
+
+        print("Cam display init success!")
+
+    def enqueue_image(self, img):
+        img_list = []
+        for key, value in img.items():
+            img_list.append(value)
+        img_queue_item = np.hstack(img_list)
+        self._image_queue.put(img_queue_item)
+
+    def display_all(self):
+        while True:
+            if not self._image_queue.empty():
+                hstack_img = self._image_queue.get()
+                resized_img = cv2.resize(hstack_img, (self._display_width, self._display_height))
+                cv2.imshow("cam_view", resized_img)
+                cv2.waitKey(1)
+
+    def start_all_display(self):
+        self._cam_view_thread = threading.Thread(target=self.display_all)
+        self._cam_view_thread.start()
+
+    def stop_all_display(self):
+        self._cam_view_thread.join()
+
+
+# cam_display = CamDisplay()
 
 class QposRecorder:
     def __init__(self):
@@ -101,8 +154,8 @@ def wait_for_key(target_key):
     with keyboard.Listener(on_press=on_press) as listener:
         listener.join()  # 阻塞程序直到监听器结束
 # 在后台启动键盘监听线程
-listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-listener.start()
+# listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+# listener.start()
 def read_config(config_file: str):
     global multi_device_sync_config
     with open(config_file, "r") as f:
@@ -313,19 +366,12 @@ def button():
     root.mainloop()
 
 
-def main():
+def main(cam_display):
     start_time = time.time()
     global curr_device_cnt, max_timesteps, qpos_list, images_dict, QposRecorder, serial_number
     read_config(config_file_path)
     ctx = Context()
     device_list = ctx.query_devices()
-
-    # device_info = device_list[0].get_device_info()
-    # device_name = device_info.get_name()
-    # device_pid = device_info.get_pid()
-    # serial_number = device_info.get_serial_number()
-
-    # print(f"device :-----------------------", device_name)
     if device_list.get_count() == 0:
         print("No device connected")
         return
@@ -362,54 +408,50 @@ def main():
         pipelines.append(pipeline)
         configs.append(config)
     # max_timesteps = 400
+    print(serial_number,curr_device_cnt)
     qpos_list = []
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
     save_image_dir = os.path.join(os.getcwd(), "color_images")
     if not os.path.exists(save_image_dir):
         os.mkdir(save_image_dir)
-    # save_image_dir = os.path.join(os.getcwd(), "color_images_")
-    # if not os.path.exists(save_image_dir):
-    #     os.mkdir(save_image_dir)
     start_streams(pipelines, configs)
-    # threading.Event().wait(0.1)
     pre_time = time.time()
-    # button()
-    get_image_number = 0
     global stop_processing
     try:
         now = time.time()
         print(pre_time-start_time)
         for i in range(30):
-            image = process_frames(pipelines)
+            process_frames(pipelines)
         drop_time  = time.time()
         print(drop_time-now)
         wait_for_key('s')
-        for i in tqdm(range(max_timesteps)):
-            now = time.time()
 
-                # 在这里执行你的保存代码
-            # 创建并启动监听器
-            # print(f"\n"
-            #       f"-------------------------------------episode{i}-------------------------------------------------"
-            #       f"\n")
+        # for i in tqdm(range(max_timesteps)):
+        for i in range(max_timesteps):
+            now = time.time()
             image = process_frames(pipelines)
-            # if image == []:
-            #     image = process_frames(pipelines)
-            # print(image)
+            cam_display.enqueue_image(image)
+
+            # cv2.imshow("top", img_top)
+            print("Enqueue Image")
+            print(f"Active thread count: {threading.active_count()}")
+            # print(f"self._top_thread: {cam_display._top_thread.is_alive()}")
+            # print(f"self._top_thread: {cam_display._left_thread.is_alive()}")
+            # print(f"self._top_thread: {cam_display._right_thread.is_alive()}")
+
             angle_qpos = posRecorder.get_state()
             radius_qpos = [math.radians(j) for j in angle_qpos]
             radius_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
-            # print(radius_qpos[6])
             qpos_list.append(radius_qpos)
             if curr_device_cnt==1:
                 pass
             elif curr_device_cnt == 2:
-                images_dict['top'].append(cv2.resize(image[1], (640, 480)))
-                images_dict['right_wrist'].append(cv2.resize(image[0], (640, 480)))
+                images_dict['top'].append(cv2.resize(image[0], (640, 480)))
+                images_dict['right_wrist'].append(cv2.resize(image[1], (640, 480)))
             elif curr_device_cnt ==3:
-                images_dict['top'].append(cv2.resize(image[1], (640, 480)))
+                images_dict['top'].append(cv2.resize(image[2], (640, 480)))
                 images_dict['right_wrist'].append(cv2.resize(image[0], (640, 480)))
-                images_dict['left_wrist'].append(cv2.resize(image[2], (640, 480)))
+                images_dict['left_wrist'].append(cv2.resize(image[1], (640, 480)))
 
             else:
                 raise "device error"
@@ -418,17 +460,9 @@ def main():
                 cv2.imwrite(filename_right,cv2.resize(images_dict['right_wrist'][0], (640, 480)))
                 filename_top= os.path.join(os.getcwd(), "color_images", f"color_image_top_0.png")
                 cv2.imwrite(filename_top,cv2.resize(images_dict['top'][0], (640, 480)))
+                filename_left = os.path.join(os.getcwd(), "color_images", f"color_image_left_0.png")
+                cv2.imwrite(filename_left, cv2.resize(images_dict['left_wrist'][0], (640, 480)))
 
-
-            # print(f"7 joint :{posRecorder.get_state()[-1]}")
-            # print(angle_qpos[1])
-            # if angle_qpos[1]>60:
-            #     # print(qpos)
-            #     posRecorder.real_right_arm.rm_set_tool_voltage(0)
-            # else:
-            #     posRecorder.real_right_arm.rm_set_tool_voltage(3)
-            next_episode = time.time()
-            # print(f"1 episode time : {next_episode - now}")
 
     except KeyboardInterrupt:
         print("Interrupted by user")
@@ -440,7 +474,10 @@ def main():
 
         # 创建动作列表
         action_list = qpos_list
-        qpos_list = np.vstack([qpos_list[0], qpos_list])
+        if qpos_list == []:
+            raise "qpos is none"
+        else:
+            qpos_list = np.vstack([qpos_list[0], qpos_list])
 
         # 构建数据字典
         data_dict = {
@@ -460,17 +497,30 @@ def main():
         save_hdf5(
             max_timesteps=max_timesteps,
             joints_nums=7,
-            episode_idx=1,
+            episode_idx=0,
             data_dict=data_dict,
-            reshape_hdf5_path='/home/zhnh/Documents/project/act_arm_project/2_hdf5_file'
+            reshape_hdf5_path='/home/zhnh/Documents/project/act_arm_project/3_cam_1.2'
         )
         # 确保监听器线程被正确关闭
         # listener_thread.join()
         print("===============Stopping pipelines====")
         stop_streams(pipelines)
+        cam_display.stop_all_display()
+
+
 if __name__ == "__main__":
+    print("creating windows")
+    # cv2.startWindowThread()
+    # cv2.namedWindow("top", cv2.WINDOW_NORMAL)
+    # cv2.namedWindow("right", cv2.WINDOW_NORMAL)
+    # cv2.namedWindow("left", cv2.WINDOW_NORMAL)
+
+    cam_display = CamDisplay()
+    cam_display.start_all_display()
+
+    print("Create windows done")
     start = time.time()
     max_timesteps=25
-    main()
+    main(cam_display=cam_display)
     end = time.time()
     print(f"total time in 1 roll:{end-start}")

@@ -2,6 +2,8 @@ from datetime import datetime
 import os, datetime, sys
 import argparse
 
+from networkx import rich_club_coefficient
+from constants import RIGHT_ARM_TASK_CONFIGS, DATA_DIR
 from networkx.readwrite.json_graph.tree import tree_data
 from triton.language.semantic import store
 
@@ -17,10 +19,10 @@ from tqdm import tqdm
 from visualize_episodes import visualize_joints
 # from constants import HDF5_DIR, DATA_DIR
 from hdf5_edit import get_image_from_folder, get_top_right_image
+from Robotic_Arm.rm_robot_interface import *
 current_time = datetime.datetime.now()
-JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
-STATE_NAMES = JOINT_NAMES + ["gripper"]
-camera_names = ['top', 'right_wrist','left_wrist']
+
+camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
 
 
 class QposRecorder:
@@ -52,7 +54,7 @@ def rand_action():
 
 def main(args):
     camera_top_data, camera_right_data, camera_left_data, qpos_list, action_ = get_state(
-        r'/home/zhnh/Documents/project/act_arm_project/3_cam_1.2/episode_0.hdf5')
+        r'/home/wfx/wfx-project/test/ACT_plus_plus-deploy_get_data/HDF5/gp_episode_2_25_15/episode_0.hdf5')
     # actions_list = []
     # qpos_list = []
     images_dict = {cam_name: [] for cam_name in camera_names}  # 用于存储每个相机的图片
@@ -65,11 +67,11 @@ def main(args):
         top_image, right_image = get_top_right_image(image_directory, '.jpg')
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
-        'task_name': 'train',
-        'ckpt_dir': r'/home/zhnh/Documents/project/act_arm_project/3_cam_1.2',
-        'policy_class': 'ACT',
-        'chunk_size': 90,
-        'backbone': 'resnet18',
+        'task_name': RIGHT_ARM_TASK_CONFIGS['train']['task_name'],
+        'ckpt_dir': DATA_DIR,
+        'policy_class': RIGHT_ARM_TASK_CONFIGS['train']['policy_class'],
+        'chunk_size': RIGHT_ARM_TASK_CONFIGS['train']['chunk_size'],
+        'backbone': RIGHT_ARM_TASK_CONFIGS['train']['backbone'],
         'temporal_agg':True,
         'max_timesteps': loop_len,
         'ckpt_name': "policy_best.ckpt"
@@ -85,7 +87,7 @@ def main(args):
         image_dict = {
             'top': camera_top_data[i],
             'right_wrist': camera_right_data[i],
-            'left_wrist': camera_left_data[i],
+            # 'left_wrist': camera_left_data[i],
         }
         # print(image_dict)
         if args['joint_true'] is True:
@@ -114,13 +116,7 @@ def main(args):
     image_path = os.path.join(path_save_image, config['backbone']+"_"+ os.path.splitext(config['ckpt_name'])[0]+ ".png")
     loss_apth = os.path.join(path_save_image, 'loss' + current_time.strftime("%m-%d-%H-%M") + ".png")
     visualize_joints(qpos_list, actions_list, image_path)
-    # plt.figure()
-    # plt.plot(loss)
-    # plt.legend(JOINT_NAMES)
-    # plt.savefig(loss_apth)
-    # plt.show()
-    # plt.close()
-    # print(actions_list)
+
 
 
 if __name__ == '__main__':

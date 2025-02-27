@@ -110,7 +110,8 @@ def main(args):
     name_filter = task_config.get('name_filter', lambda n: True)
 
     # fixed parameters
-    state_dim = 7
+    state_dim = task_config['state_dim']
+    action_dim= task_config['action_dim']
     lr_backbone = 1e-5
     backbone = task_config['backbone']
     if policy_class == 'ACT':
@@ -131,9 +132,9 @@ def main(args):
                          'vq': args['use_vq'],
                          'vq_class': args['vq_class'],
                          'vq_dim': args['vq_dim'],
-                         'action_dim': 12,
+                         'action_dim': action_dim,
                          'no_encoder': args['no_encoder'],
-                         'state_dim': 10,
+                         'state_dim': state_dim,
                          'eval': False,
                          'qpos_noise_std': task_config['qpos_noise_std'],
                          'dropout': task_config['dropout'],

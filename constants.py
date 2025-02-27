@@ -5,9 +5,9 @@ import os
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 
 # DATA_DIR = 'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_model'
-DATA_DIR = r"/home/zhnh/Documents/project/act_arm_project/3_cam_1.2"
+DATA_DIR = r"/home/wfx/wfx-project/test/ACT_plus_plus-deploy_get_data/HDF5/gp_episode_2_25_15"
 HDF5_DIR = DATA_DIR
-EVERY=1000
+EVERY=100
 SIM_TASK_CONFIGS = {
     'sim_transfer_cube_scripted': {
         'dataset_dir': DATA_DIR,
@@ -66,11 +66,11 @@ RIGHT_ARM_TASK_CONFIGS = {
         'task_name': 'right_arm_train',
         'batch_size': 8,
         'seed': 0,
-        'num_steps': 20000,
+        'num_steps': 200,
         'lr': 1e-5,
         'num_episodes': None,
         'episode_len': 400,
-        'camera_names': ['top', 'right_wrist','left_wrist'],
+        'camera_names': ['top', 'right_wrist'],
         'chunk_size': 90,
         'hidden_dim': 512,
         'dim_feedforward': 3200,
@@ -89,6 +89,9 @@ RIGHT_ARM_TASK_CONFIGS = {
         'train_ratio': 0.95,
         'num_workers': 4,
         'val_workers': 4,
+        'state_dim': 10,
+        'action_dim': 12,
+
     },
     'train_test': {
         'dataset_dir': HDF5_DIR,

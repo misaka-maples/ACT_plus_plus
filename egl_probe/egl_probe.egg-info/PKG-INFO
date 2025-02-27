@@ -1,0 +1,43 @@
+Metadata-Version: 2.2
+Name: egl_probe
+Version: 1.0.1
+Home-page: https://github.com/StanfordVL/egl_probe
+Author: Stanford University
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: author
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+
+# egl_probe
+
+Author: Fei Xia (feixia@stanford.edu)
+
+Adapted from (https://github.com/erwincoumans/egl_example).
+
+## Install from pypi
+
+```bash
+pip install egl_probe
+python -m egl_probe.get_available_devices
+```
+
+## Install from source
+
+```bash
+pip install -e .
+python get_available_devices.py
+```
+
+## Example output
+
+```
+INFO:root:Device 0 is available for rendering
+INFO:root:Device 1 is available for rendering
+INFO:root:Device 2 is available for rendering
+INFO:root:Device 3 is available for rendering
+INFO:root:Graphics Devices: [0, 1, 2, 3]
+INFO:root:Graphics Device CUDA Ids: [3, 2, 1, 0]
+```
+

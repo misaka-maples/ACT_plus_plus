@@ -1,20 +1,5 @@
 import os, sys
 from pathlib import Path
-
-# def get_env():
-#     root_path = Path(__file__).resolve().parent.parent
-#     sys.path.append(str(root_path))
-#     # print(root_path)
-#
-#     detr_path = os.path.join(root_path, 'detr')
-#     sys.path.append(str(detr_path))
-#     # print(detr_path)
-#
-#     robomimic_path = os.path.join(root_path, 'robomimic', 'robomimic')
-#     sys.path.append(str(robomimic_path))
-#
-#
-# get_env()
 from utils import make_policy
 import torch
 import pickle
@@ -26,7 +11,7 @@ import os
 import pickle
 import numpy as np
 import time
-
+from constants import DATA_DIR,RIGHT_ARM_TASK_CONFIGS
 
 class ActionGenerator:
     def __init__(self, args):
@@ -44,12 +29,12 @@ class ActionGenerator:
             'enc_layers': 4,
             'dec_layers': 7,
             'nheads': 8,
-            'camera_names': ['top', 'right_wrist', 'left_wrist'],
+            'camera_names': RIGHT_ARM_TASK_CONFIGS['train']['camera_names'],
             # 'vq': args['use_vq'],
 
-            'action_dim': 9,
+            'action_dim': RIGHT_ARM_TASK_CONFIGS['train']['action_dim'],
             # 'no_encoder': args['no_encoder'],
-            'state_dim': 7,
+            'state_dim': RIGHT_ARM_TASK_CONFIGS['train']['state_dim'],
             "eval": args['eval']
         }
         self.config = {
@@ -58,7 +43,7 @@ class ActionGenerator:
             'policy_config': self.policy_config,
             'episode_len': 400,
             'temporal_agg': args['temporal_agg'],
-            'state_dim': 7,
+            'state_dim': self.policy_config['state_dim'],
         }
         # 载入策略模型
         self.ckpt_dir = args['ckpt_dir']

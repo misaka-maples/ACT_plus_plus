@@ -8,6 +8,7 @@ import cv2
 import os
 import fnmatch
 import numpy as np
+from torch import le
 from constants import RIGHT_ARM_TASK_CONFIGS, HDF5_DIR, DATA_DIR
 camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
 max_timesteps = 0
@@ -45,7 +46,7 @@ def get_state(file_path):
             # top_paths = [path for path in data if 'top' in path]            # 检查是否存在原始的路径
             top_paths = [path for path in data if 'top' in path or 'high' in path]
             right_paths = [path for path in data if 'right' in path]
-            left_paths = [path for path in data if 'left' in path]
+            # left_paths = [path for path in data if 'left' in path]
             qpos_paths = [path for path in data if 'qpos' in path]
             action_paths = [path for path in data if 'action' in path]
 
@@ -59,13 +60,20 @@ def get_state(file_path):
             right = right_paths[0]  # 如果有多个 'right'，只取第一个
             qpos = qpos_paths[0]  # 如果有多个 'qpos'，只取第一个
             action = action_paths[0]  # 如果有多个 'action'，只取第一个
-            left = left_paths[0]
+            # print(left)
+            # left_paths = None
+            # if left_paths is not None:
+            #     left = left_paths[0]
+            #     camera_left_data = f[left][:]  # 读取图像数据
+            # else:
+            #     left = None
+            #     camera_left_data = None
             if top not in f:
                 raise KeyError(f"Path '{top}' not found in the HDF5 file.")
             if right not in f:
                 raise KeyError(f"Path '{right}' not found in the HDF5 file.")
-            if left not in f:
-                raise KeyError(f"Path '{left}' not found in the HDF5 file.")
+            # if left not in f:
+            #     raise KeyError(f"Path '{left}' not found in the HDF5 file.")
 
             if qpos not in f:
                 raise KeyError(f"Path '{qpos}' not found in the HDF5 file.")
@@ -73,7 +81,7 @@ def get_state(file_path):
                 raise KeyError(f"Path '{action}' not found in the HDF5 file.")
             camera_top_data = f[top][:]
             camera_right_data = f[right][:]
-            camera_left_data = f[left][:]
+            
             qpos = f[qpos][:]
             action = f[action][:]
             camera_top_data_list = []  # 用于存储解压后的帧
@@ -85,24 +93,26 @@ def get_state(file_path):
                 for i in range(num_images):
                     compressed_image = camera_top_data[i]
                     compressed_image_ = camera_right_data[i]
-                    compressed_image__ = camera_left_data[i]
-
+                    # if left is not None:
+                    #     compressed_image__ = camera_left_data[i]
+                    #     decompressed_image__ = cv2.imdecode(compressed_image__, 1)
+                    #     camera_left_data_list.append(decompressed_image__)
                     # 解压为彩色图像
                     decompressed_image = cv2.imdecode(compressed_image, 1)
                     decompressed_image_ = cv2.imdecode(compressed_image_, 1)
-                    decompressed_image__ = cv2.imdecode(compressed_image__, 1)
 
                     # 确保通道顺序是 BGR
                     # decompressed_image = cv2.cvtColor(decompressed_image, cv2.COLOR_RGB2BGR)
                     # image_list.append(decompressed_image)
                     camera_top_data_list.append(decompressed_image)
                     camera_right_data_list.append(decompressed_image_)
-                    camera_left_data_list.append(decompressed_image__)
+                    
 
             else:
                 camera_top_data_list = camera_top_data
                 camera_right_data_list = camera_right_data
-                camera_left_data_list = camera_left_data
+                # if left is not None:
+                #     camera_left_data_list = camera_left_data
 
     except Exception as e:
         print(f"Error load hdf5 file:\n {e}")

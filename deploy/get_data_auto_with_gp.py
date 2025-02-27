@@ -49,8 +49,8 @@ test_pos_2 = [-0.136529, 0.041631, 0.681072, 1.808, 0.971, -1.668]
 # final_pos=test_pos_2
 
 class gpcontrol():
-    def __init__(self):
-        self.DEFAULT_SERIAL_PORT = "/dev/ttyACM0"
+    def __init__(self,DEFAULT_SERIAL_PORT = "/dev/ttyACM0"):
+        self.DEFAULT_SERIAL_PORT = DEFAULT_SERIAL_PORT
         self.BAUD_RATE = 50000
         self.min_data = b'\x00\x00\xFF\xFF\xFF\xFF\x00\x00'
         self.max_data = b'\x00\xFF\xFF\xFF\xFF\xFF\x00\x00'
@@ -211,6 +211,26 @@ class gpcontrol():
                 gpstate,gppos,gpforce = gpdata[16:18],gpdata[18:20],gpdata[22:24]
                 return [gpstate,gppos,gpforce]
         
+    def control_gp(self, gpstate, gppos, gpforce):
+        gpstate = gpstate.to_bytes(2, 'big')
+        gppos = gppos.to_bytes(2, 'big')
+        gpforce = gpforce.to_bytes(2, 'big')
+        gpcontrol_data = b'\x00\x00' + gpstate + gppos + b'\x00\x00' + gpforce
+        print(f"gpcontrol_data: {gpcontrol_data.hex()}")
+            
+        while 1:   
+            self.send_can_data(b'\x00\x00\x00\x01', gpcontrol_data, 0x01)
+            data = self.read_data()
+            if data is not None:
+                _, gpdata = data
+                while gpdata == 0:
+                    self.send_can_data(b'\x00\x00\x00\x01', gpcontrol_data, 0x01)
+                    data = self.read_data()
+                    if data is not None:
+                        _, gpdata = data
+                gpstate,gppos,gpforce = gpdata[16:18],gpdata[18:20],gpdata[22:24]
+                return [gpstate,gppos,gpforce]
+            # return data
     
     def close(self):
         if self.ser:

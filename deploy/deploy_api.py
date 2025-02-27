@@ -8,6 +8,7 @@ from Robotic_Arm.rm_robot_interface import *
 import math, h5py
 import cv2
 import numpy as np
+from sympy import im
 # from decorator import EMPTY
 from pyorbbecsdk import *
 from tqdm import tqdm
@@ -17,7 +18,8 @@ from utils import frame_to_bgr_image, visualize_joints
 from policy_action_generation import ActionGenerator
 frames_queue_lock = Lock()
 import datetime
-
+from constants import RIGHT_ARM_TASK_CONFIGS,DATA_DIR
+from get_data_auto_with_gp import gpcontrol
 # Configuration settings
 MAX_DEVICES = 3
 MAX_QUEUE_SIZE = 2
@@ -31,9 +33,9 @@ stop_processing = False
 curr_device_cnt = 0
 
 # Load config file for multiple devices
-config_file_path = os.path.join(os.path.dirname(__file__), "/home/zhnh/Documents/project/act_arm_project/pyorbbecsdk-main/config/multi_device_sync_config.json")
+config_file_path = os.path.join(os.path.dirname(__file__), "/home/wfx/wfx-project/test/ACT_plus_plus-deploy_get_data/config/multi_device_sync_config.json")
 multi_device_sync_config = {}
-camera_names = ['top', 'right_wrist']
+camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
 
 
 class QposRecorder:
@@ -180,16 +182,16 @@ def main():
     qpos_list_ = []
     config = {
         'eval': True,  # 表示启用了 eval 模式（如需要布尔类型，直接写 True/False）
-        'task_name': 'train',
-        'ckpt_dir': '/home/zhnh/Documents/project/act_arm_project/models/1224_resnet18',
-        'ckpt_name': "policy_best.ckpt",
-        'policy_class': 'ACT',
-        'chunk_size': 210,
-        'backbone': 'resnet18',
+        'task_name': RIGHT_ARM_TASK_CONFIGS['train']['task_name'],
+        'ckpt_dir': DATA_DIR,
+        'policy_class': RIGHT_ARM_TASK_CONFIGS['train']['policy_class'],
+        'chunk_size': RIGHT_ARM_TASK_CONFIGS['train']['chunk_size'],
+        'backbone': RIGHT_ARM_TASK_CONFIGS['train']['backbone'],
         'temporal_agg': False,
         'max_timesteps': max_timesteps,
     }
     ActionGenerator1= ActionGenerator(config)
+    gpcontrol1 = gpcontrol()
     global stop_processing
     try:
         for i in tqdm(range(max_timesteps)):
@@ -202,6 +204,9 @@ def main():
             angle_qpos = posRecorder.get_state()
             radius_qpos = [math.radians(j) for j in angle_qpos]
             radius_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
+            radius_qpos.append(0)
+            radius_qpos.append(0)
+            radius_qpos.append(0)
             # print(radius_qpos[6])
             qpos_list.append(radius_qpos)
             images_dict['right_wrist']=image[0]
@@ -226,12 +231,13 @@ def main():
             qpos_list_.append(ActionGenerator1.qpos_list)
             actions_list.append(actions)
             power = actions[6]
-            print(f"电磁铁：",power)
+            print(f"tool voltage:",power)
             actions = [math.degrees(i) for i in actions[:6]]
             print(f":---------------------------------------actions--------------------"
                   f"--------------------------:\n{actions}")
             posRecorder.real_right_arm.rm_movej(actions, 10, 0, 0, 1)
             angle_qpos[6] = posRecorder.real_right_arm.rm_get_tool_voltage()[1]
+            gpcontrol1.control_gp(angle_qpos[-3],angle_qpos[-2],angle_qpos[-1])
             # print(angle_qpos[:6], actions)
 
             # result_action = interpolate_with_step_limit(angle_qpos[:6], actions, 2)

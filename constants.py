@@ -5,8 +5,8 @@ import os
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 
 # DATA_DIR = 'D:\BYD\git_ku\ACT_plus_plus-master\ACT_plus_plus-master\hdf5_model'
-DATA_DIR = "D:\\aloha\qpos_7_image_2\ACT_plus_plus\hdf5_file"
-HDF5_DIR = DATA_DIR + '\\save_dir'
+DATA_DIR = "/workspace/ACT_plus_plus/hdf5_file"
+HDF5_DIR = DATA_DIR 
 SIM_TASK_CONFIGS = {
     'sim_transfer_cube_scripted': {
         'dataset_dir': DATA_DIR,
@@ -64,14 +64,14 @@ RIGHT_ARM_TASK_CONFIGS = {
         'ckpt_dir': DATA_DIR,
         'policy_class': 'ACT',
         'task_name': 'right_arm_train',
-        'batch_size': 16,
+        'batch_size': 8,
         'seed': 0,
         'num_steps': 1000,
         'lr': 2e-5,
         'num_episodes': None,
         'episode_len': 400,
         'camera_names': ['top', 'right_wrist'],
-        'chunk_size': 210,
+        'chunk_size': 15,
         'hidden_dim': 512,
         'dim_feedforward': 3200,
         'kl_weight': 10,
@@ -81,6 +81,7 @@ RIGHT_ARM_TASK_CONFIGS = {
         'load_pretrain': False,
         'resume_ckpt_path': DATA_DIR + 'policy_best.ckpt',
         'loss_save_every': 500,
+        'worker_num':8,
     },
     'train_test': {
         'dataset_dir': HDF5_DIR,
@@ -105,6 +106,33 @@ RIGHT_ARM_TASK_CONFIGS = {
         'resume_ckpt_path': DATA_DIR + '/policy_last.ckpt',
         'loss_save_every': 50,
     }
+
+}
+ARM_CONFIG = {
+     'train': {
+        'dataset_dir': HDF5_DIR,
+        'ckpt_dir': DATA_DIR,
+        'policy_class': 'ACT',
+        'task_name': 'right_arm_train',
+        'batch_size': 8,
+        'seed': 0,
+        'num_steps': 1000,
+        'lr': 2e-5,
+        'num_episodes': None,
+        'episode_len': 400,
+        'camera_names': ['top', 'right_wrist'],
+        'chunk_size': 15,
+        'hidden_dim': 512,
+        'dim_feedforward': 3200,
+        'kl_weight': 10,
+        'eval_every': 500,
+        'save_every': 500,
+        'validate_every': 500,
+        'load_pretrain': False,
+        'resume_ckpt_path': DATA_DIR + 'policy_best.ckpt',
+        'loss_save_every': 500,
+        'worker_num':8,
+        }
 
 }
 ### Simulation envs fixed constants

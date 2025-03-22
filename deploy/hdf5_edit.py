@@ -2,8 +2,10 @@ import copy
 import random
 
 import matplotlib.pyplot as plt
-
-from constants import HDF5_DIR, DATA_DIR
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+# from constants import HDF5_DIR, DATA_DIR
 import h5py
 import cv2
 import os
@@ -146,8 +148,8 @@ def modify_hdf5(file_path, compress=None, truncate_ranges=None):
             if camera_top_data.shape[1:] == (480, 640, 3) and camera_right_data.shape[1:] == (480, 640, 3):
                 f.attrs['compress'] = False
             # camera_top_data = decompress_images(camera_top_data)
-            qpos = qpos[:, :7]
-            actions = actions[:, :7]
+            # qpos = qpos[:, :9]
+            # actions = actions[:, :9]
 
             # 截断数据，如果指定了截断范围
             def truncate_data(data, key):
@@ -162,7 +164,7 @@ def modify_hdf5(file_path, compress=None, truncate_ranges=None):
             camera_right_data = truncate_data(camera_right_data, 'right_wrist')
             qpos = truncate_data(qpos, 'qpos')
             actions = truncate_data(actions, 'action')
-
+            print(f"qpos_shape: {qpos.shape}\nactions_shape: {actions.shape}\ncamera_top_data_shape: {camera_top_data.shape}\ncamera_right_data_shape: {camera_right_data.shape}")
             # 创建新的路径并写入数据
             new_paths_top = ['observations/images/top']
             new_paths_right = ['observations/images/right_wrist']
@@ -445,10 +447,10 @@ if __name__ == '__main__':
     #     'right_wrist': (45, 100),
     #     'qpos': (45, 100),
     # }
-    # modify_hdf5(DATA_DIR + '\\reshape_hdf5\\episode_0.hdf5', compress=True)
+    modify_hdf5("/workspace/ACT_plus_plus/hdf5_file/episode_1.hdf5", compress=False)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
-    save_video('D:\\aloha\qpos_7_image_2\ACT_plus_plus\hdf5_file\\temo', fps=2, i=0)
+    # save_video('D:\\aloha\qpos_7_image_2\ACT_plus_plus\hdf5_file\\temo', fps=2, i=0)
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀

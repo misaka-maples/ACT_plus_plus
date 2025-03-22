@@ -1,29 +1,4 @@
 
-def get_env_():
-    import sys
-    import os
-
-    # 当前文件的目录
-    current_dir = os.path.dirname(__file__)
-
-    # 上一级目录
-    parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
-
-    # 要添加的目录
-    dirs_to_add = [
-        parent_dir,  # 项目根目录
-        os.path.join(parent_dir, 'detr'),  # 上一级的
-        os.path.join(parent_dir, 'robomimic'),
-        os.path.join(parent_dir, 'robomimic', 'robomimic')
-    ]
-
-    # 动态添加目录到 sys.path
-    for directory in dirs_to_add:
-        if directory not in sys.path:  # 避免重复添加
-            sys.path.append(directory)
-
-get_env_()
-import wandb
 import torch
 import numpy as np
 import os
@@ -48,28 +23,13 @@ from visualize_episodes import save_videos
 from detr.models.latent_model import Latent_Model_Transformer
 from sim_env import BOX_POSE
 import os
-os.environ["WANDB_MODE"] = "disabled"  # 禁用wandb
-# settings = wandb.Settings(
-#     moitor_=False,       # 禁用 GPU 监控
-#     monitor_cpu=False,        # 禁用 CPU 监控
-#     monitor_network=False,    # 禁用网络监控
-#     monitor_disk=False,       # 禁用磁盘监控
-#     monitor_memory=False,     # 禁用内存监控（如果适用）
-#     monitor_system=False      # 禁用系统监控（综合）
-# )
-wandb.init(
-    project='act++',
-    name='loss_log',
-    # settings=settings
-)
-#63d8db0b669a1b1c712284f186093c19c278719c
+
 def get_auto_index(dataset_dir):
     max_idx = 1000
     for i in range(max_idx + 1):
         if not os.path.isfile(os.path.join(dataset_dir, f'qpos_{i}.npy')):
             return i
     raise Exception(f"Error getting auto index, or more than {max_idx} episodes")
-
 
 def main(args):
     # set_seed(1)
@@ -84,9 +44,6 @@ def main(args):
     elif task_name == 'train' or task_name == 'train_test':
         from constants import RIGHT_ARM_TASK_CONFIGS
         task_config = RIGHT_ARM_TASK_CONFIGS[task_name]
-    else:
-        from aloha_scripts.constants import TASK_CONFIGS
-        task_config = TASK_CONFIGS[task_name]
     is_eval = args['eval']
     ckpt_dir = task_config['ckpt_dir']
     policy_class = task_config['policy_class']
@@ -111,7 +68,7 @@ def main(args):
     name_filter = task_config.get('name_filter', lambda n: True)
 
     # fixed parameters
-    state_dim = 7
+    state_dim = 9
     lr_backbone = 1e-5
     backbone = 'resnet18'
     if policy_class == 'ACT':
@@ -132,9 +89,9 @@ def main(args):
                          'vq': args['use_vq'],
                          'vq_class': args['vq_class'],
                          'vq_dim': args['vq_dim'],
-                         'action_dim': 9,
+                         'action_dim': 11,
                          'no_encoder': args['no_encoder'],
-                         'state_dim': 7
+                         'state_dim': state_dim
                          }
     elif policy_class == 'Diffusion':
 
@@ -209,7 +166,7 @@ def main(args):
         print()
         exit()
 
-    train_dataloader, val_dataloader, stats, _ = load_data(dataset_dir, name_filter, camera_names, batch_size_train, batch_size_val, task_config['chunk_size'], args['skip_mirrored_data'], config['load_pretrain'], policy_class, stats_dir_l=stats_dir, sample_weights=sample_weights, train_ratio=train_ratio)
+    train_dataloader, val_dataloader, stats, _ = load_data(dataset_dir, name_filter, camera_names, batch_size_train, batch_size_val, task_config['chunk_size'], args['skip_mirrored_data'], config['load_pretrain'], policy_class, stats_dir_l=stats_dir, sample_weights=sample_weights, train_ratio=train_ratio, worker_num=task_config['worker_num'])
 
     # save dataset stats
     stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
@@ -636,7 +593,7 @@ def train_bc(train_dataloader, val_dataloader, config):
                         break
 
                 validation_summary = compute_dict_mean(validation_dicts)
-                print(f"validation_dicts:{validation_dicts}\nvalidation_summary:{validation_summary}")
+                # print(f"validation_dicts:{validation_dicts}\nvalidation_summary:{validation_summary}")
                 epoch_val_loss = validation_summary['loss']
                 if epoch_val_loss < min_val_loss:
                     min_val_loss = epoch_val_loss
@@ -644,7 +601,6 @@ def train_bc(train_dataloader, val_dataloader, config):
             # print(f"1111111111111111111111111111111111111111111111")
             for k in list(validation_summary.keys()):
                 validation_summary[f'val_{k}'] = validation_summary.pop(k)
-                wandb.log(validation_summary, step=step)
             print(f'Val loss:   {epoch_val_loss:.5f}')
             summary_string = ''
             for k, v in validation_summary.items():
@@ -669,7 +625,6 @@ def train_bc(train_dataloader, val_dataloader, config):
         loss = forward_dict['loss']
         loss.backward()
         optimizer.step()
-        wandb.log(forward_dict, step=step) # not great, make training 1.md-2% slower
 
         if step % save_every == 0:
             ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')

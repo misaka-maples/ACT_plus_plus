@@ -18,9 +18,6 @@ from typing import Union, Any, Optional
 import cv2
 import numpy as np
 
-from pyorbbecsdk import FormatConvertFilter, VideoFrame
-from pyorbbecsdk import OBFormat, OBConvertFormat
-
 
 def yuyv_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
     yuyv = frame.reshape((height, width, 2))
@@ -59,72 +56,6 @@ def nv12_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
     return bgr_image
 
 
-def determine_convert_format(frame: VideoFrame):
-    if frame.get_format() == OBFormat.I420:
-        return OBConvertFormat.I420_TO_RGB888
-    elif frame.get_format() == OBFormat.MJPG:
-        return OBConvertFormat.MJPG_TO_RGB888
-    elif frame.get_format() == OBFormat.YUYV:
-        return OBConvertFormat.YUYV_TO_RGB888
-    elif frame.get_format() == OBFormat.NV21:
-        return OBConvertFormat.NV21_TO_RGB888
-    elif frame.get_format() == OBFormat.NV12:
-        return OBConvertFormat.NV12_TO_RGB888
-    elif frame.get_format() == OBFormat.UYVY:
-        return OBConvertFormat.UYVY_TO_RGB888
-    else:
-        return None
-
-
-def frame_to_rgb_frame(frame: VideoFrame) -> Union[Optional[VideoFrame], Any]:
-    if frame.get_format() == OBFormat.RGB:
-        return frame
-    convert_format = determine_convert_format(frame)
-    if convert_format is None:
-        print("Unsupported format")
-        return None
-    print("covert format: {}".format(convert_format))
-    convert_filter = FormatConvertFilter()
-    convert_filter.set_format_convert_format(convert_format)
-    rgb_frame = convert_filter.process(frame)
-    if rgb_frame is None:
-        print("Convert {} to RGB failed".format(frame.get_format()))
-    return rgb_frame
-
-
-def frame_to_bgr_image(frame: VideoFrame) -> Union[Optional[np.array], Any]:
-    width = frame.get_width()
-    height = frame.get_height()
-    color_format = frame.get_format()
-    data = np.asanyarray(frame.get_data())
-    image = np.zeros((height, width, 3), dtype=np.uint8)
-    if color_format == OBFormat.RGB:
-        image = np.resize(data, (height, width, 3))
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    elif color_format == OBFormat.BGR:
-        image = np.resize(data, (height, width, 3))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    elif color_format == OBFormat.YUYV:
-        image = np.resize(data, (height, width, 2))
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_YUYV)
-    elif color_format == OBFormat.MJPG:
-        image = cv2.imdecode(data, cv2.IMREAD_COLOR)
-    elif color_format == OBFormat.I420:
-        image = i420_to_bgr(data, width, height)
-        return image
-    elif color_format == OBFormat.NV12:
-        image = nv12_to_bgr(data, width, height)
-        return image
-    elif color_format == OBFormat.NV21:
-        image = nv21_to_bgr(data, width, height)
-        return image
-    elif color_format == OBFormat.UYVY:
-        image = np.resize(data, (height, width, 2))
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_UYVY)
-    else:
-        print("Unsupported color format: {}".format(color_format))
-        return None
-    return image
 
 
 def flatten_list(l):
@@ -344,7 +275,7 @@ def BatchSampler(batch_size, episode_len_l, sample_weights):
         yield batch
 
 
-def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_size_val, chunk_size, skip_mirrored_data=False, load_pretrain=False, policy_class=None, stats_dir_l=None, sample_weights=None, train_ratio=0.99):
+def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_size_val, chunk_size, skip_mirrored_data=False, load_pretrain=False, policy_class=None, stats_dir_l=None, sample_weights=None, train_ratio=0.99,worker_num=1):
     if type(dataset_dir_l) == str:
         dataset_dir_l = [dataset_dir_l]
     dataset_path_list_list = [find_all_hdf5(dataset_dir, skip_mirrored_data) for dataset_dir in dataset_dir_l]
@@ -393,8 +324,8 @@ def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_
     # construct dataset and dataloader
     train_dataset = EpisodicDataset(dataset_path_list, camera_names, norm_stats, train_episode_ids, train_episode_len, chunk_size, policy_class)
     val_dataset = EpisodicDataset(dataset_path_list, camera_names, norm_stats, val_episode_ids, val_episode_len, chunk_size, policy_class)
-    train_num_workers = (8 if os.getlogin() == 'zfu' else 16) if train_dataset.augment_images else 2
-    val_num_workers = 8 if train_dataset.augment_images else 2
+    train_num_workers = (worker_num if os.getlogin() == 'zfu' else 16) if train_dataset.augment_images else 2
+    val_num_workers = worker_num if train_dataset.augment_images else 2
     print(f'Augment images: {train_dataset.augment_images}, train_num_workers: {train_num_workers}, val_num_workers: {val_num_workers}')
     train_dataloader = DataLoader(train_dataset, batch_sampler=batch_sampler_train, pin_memory=True, num_workers=train_num_workers, prefetch_factor=2)
     val_dataloader = DataLoader(val_dataset, batch_sampler=batch_sampler_val, pin_memory=True, num_workers=val_num_workers, prefetch_factor=2)

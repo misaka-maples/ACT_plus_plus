@@ -353,7 +353,7 @@ def build(args):
         transformer,  # transformer 模型
         encoder,  # 编码器，可能为 None
         state_dim=args.state_dim,  # 状态维度
-        num_queries=args.num_queries,  # 查询数量
+        num_queries=args.chunk_size,  # 查询数量
         camera_names=args.camera_names,  # 相机名称列表
         vq=args.vq,  # 是否使用矢量量化（vector quantization）# 是否使用矢量量化（vector quantization）
         vq_class=args.vq_class,  # 矢量量化的类别数

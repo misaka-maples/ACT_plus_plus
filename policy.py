@@ -205,7 +205,7 @@ class ACTPolicy(nn.Module):
         self.optimizer = optimizer  # 优化器
         self.kl_weight = args_override['kl_weight']  # KL 散度权重
         self.vq = args_override['vq']  # 是否启用 VQ（Vector Quantization）
-        self.amplitude_weight = 0.1
+        # self.amplitude_weight = 0.1
         # print(f'KL Weight {self.kl_weight}')
 
     def __call__(self, qpos, image, actions=None, is_pad=None, vq_sample=None):
@@ -252,9 +252,9 @@ class ACTPolicy(nn.Module):
             loss_dict['kl'] = total_kld[0]
             loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight
 
-            # 计算动作幅度奖励
-            action_amplitude_reward = torch.mean(torch.abs(a_hat))
-            loss_dict['amplitude_reward'] = -self.amplitude_weight * action_amplitude_reward
+            # # 计算动作幅度奖励
+            # action_amplitude_reward = torch.mean(torch.abs(a_hat))
+            # loss_dict['amplitude_reward'] = -self.amplitude_weight * action_amplitude_reward
 
             # 调整 L1 损失
             weight = torch.abs(actions)
@@ -267,7 +267,7 @@ class ACTPolicy(nn.Module):
             # 动态调整权重
             # alpha = 0.5 * (1 + math.cos(step / max_steps * math.pi))
             alpha = 0.5
-            loss_dict['loss'] = alpha * loss_dict['l1'] + loss_dict['kl'] * self.kl_weight + loss_dict['amplitude_reward']
+            loss_dict['loss'] = alpha * loss_dict['l1'] + loss_dict['kl'] * self.kl_weight 
             return loss_dict
         else:  # 推理模式
             a_hat, _, (_, _), _, _ = self.model(qpos, image, env_state, vq_sample=vq_sample)  # 采样自先验

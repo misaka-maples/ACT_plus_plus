@@ -9,9 +9,6 @@ from itertools import repeat
 from tqdm import tqdm
 from einops import rearrange
 import time
-from torchvision import transforms
-from constants import FPS
-from constants import PUPPET_GRIPPER_JOINT_OPEN
 from utils import load_data  # data functions
 from utils import compute_dict_mean, set_seed, detach_dict, calibrate_linear_vel, postprocess_base_action  # helper functions
 from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
@@ -27,7 +24,7 @@ class Train:
             'dataset_dir':"/workspace/ACT_plus_plus/hdf5_file",
             'policy_class': 'ACT',
             'task_name': 'train',
-            'batch_size': 8,
+            'batch_size': 1,
             'seed': 0,
             'num_steps': 2000,
             'lr': 2e-5,
@@ -60,7 +57,6 @@ class Train:
             'lr_backbone': 1e-5,
             'episode_len': 100,
             'wandb_project': 'ACT_Training',  # Project name for wandb
-            'wandb_entity': 'your_wandb_entity',  # Your wandb username/team
             # 'num_queries': 15,
         }
     def main(self):
@@ -147,7 +143,7 @@ class Train:
                     validation_dicts = []
                     for batch_idx, data in enumerate(val_dataloader):
                         forward_dict = self.forward_pass(data, policy)
-                        print(forward_dict)
+                        # print(forward_dict)
                         validation_dicts.append(forward_dict)
                         if batch_idx > 50:
                             break
@@ -165,7 +161,6 @@ class Train:
 
                 for k in list(validation_summary.keys()):
                     validation_summary[f'val_{k}'] = validation_summary.pop(k)
-                print(f'Val loss:   {epoch_val_loss:.5f}')
                 summary_string = ''
                 for k, v in validation_summary.items():
                     summary_string += f'{k}: {v.item():.3f} '

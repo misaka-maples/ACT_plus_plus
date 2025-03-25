@@ -134,7 +134,7 @@ def save_videos(video, dt, video_path=None):
 
 
 # 可视化关节状态和动作
-def visualize_joints(qpos_list, command_list, plot_path=None, ylim=None, label_overwrite=None):
+def visualize_joints(qpos_list, command_list, plot_path=None, ylim=None, label_overwrite=None,STATE_NAMES=STATE_NAMES):
     if label_overwrite:
         label1, label2 = label_overwrite
     else:

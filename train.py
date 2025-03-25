@@ -200,8 +200,37 @@ class Train:
         wandb.finish()  # Close the wandb run
         print(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at step {best_step}')
         return best_ckpt_info
-    def eval(self):
-        pass
+    def eval(self,ckpt_name):
+        ckpt_dir = self.args['ckpt_dir']
+        state_dim = self.args['state_dim']
+        real_robot = self.args['real_robot']
+        policy_class = self.args['policy_class']
+        onscreen_render = self.args['onscreen_render']
+        policy_config = self.args['policy_config']
+        camera_names = self.args['camera_names']
+        max_timesteps = self.args['episode_len']
+        task_name = self.args['task_name']
+        temporal_agg = self.args['temporal_agg']
+        onscreen_cam = 'angle'
+        vq = self.args['policy_config']['vq']
+        actuator_config = self.args['actuator_config']
+        ckpt_path = os.path.join(ckpt_dir, ckpt_name)
+        policy = self.make_policy(policy_class, policy_config)
+        loading_status = policy.deserialize(torch.load(ckpt_path, weights_only=True))
+        print(loading_status)
+        policy.cuda()
+        policy.eval()
+        stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
+        with open(stats_path, 'rb') as f:
+            stats = pickle.load(f)
+
+        pre_process = lambda s_qpos: (s_qpos - stats['qpos_mean']) / stats['qpos_std']
+        post_process = lambda a: a * stats['action_std'] + stats['action_mean']
+        query_frequency = self.args['chunk_size']
+        if temporal_agg:
+            query_frequency = 1
+        max_timesteps = int(max_timesteps * 1)  # may increase for real-world tasks
+
     def data_loader(self):
         pass
     def make_policy(self):

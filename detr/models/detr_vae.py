@@ -7,12 +7,12 @@ from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 from .backbone import build_backbone
-from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
+from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer, build_transformer_decoder
+import time
 
 import numpy as np
 
 import IPython
-
 e = IPython.embed
 
 
@@ -28,15 +28,104 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
     sinusoid_table = np.array([get_position_angle_vec(pos_i) for pos_i in range(n_position)])
     sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
-    sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1.md
+    sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
 
     return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
 
+class DETRVAE_Decoder(nn.Module):
+    """ This is the decoder only transformer """
+    def __init__(self, backbones, transformer_decoder, state_dim, num_queries, camera_names, action_dim,
+                 feature_loss=False):
+        super().__init__()
+        self.num_queries = num_queries
+        self.camera_names = camera_names
+        self.cam_num = len(camera_names)
+        self.transformer_decoder = transformer_decoder
+        self.state_dim, self.action_dim = state_dim, action_dim
+        hidden_dim = transformer_decoder.d_model
+        self.action_head = nn.Linear(hidden_dim, action_dim)
+        self.proprio_head = nn.Linear(hidden_dim, state_dim)
+        self.is_pad_head = nn.Linear(hidden_dim, 1)
+        self.query_embed = nn.Embedding(num_queries, hidden_dim)
+        if backbones is not None:
+            self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
+            self.backbones = nn.ModuleList(backbones)
+            self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
+        else:
+            # input_dim = 14 + 7 # robot_state + env_state
+            self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
+            self.input_proj_env_state = nn.Linear(7, hidden_dim)
+            self.pos = torch.nn.Embedding(2, hidden_dim)
+            self.backbones = None
+        # encoder extra parameters
+        self.register_buffer('pos_table', get_sinusoid_encoding_table(1+1+num_queries, hidden_dim)) # [CLS], qpos, a_seq
+        self.additional_pos_embed = nn.Embedding(1, hidden_dim) # learned position embedding for proprio and latent
+        self.feature_loss = feature_loss
+          
+    def forward(self, qpos, image):
+        if self.feature_loss:
+            # bs,_,_,h,w = image.shape
+            image_future = image[:,len(self.camera_names):].clone()
+            image = image[:,:len(self.camera_names)].clone()
+
+        if len(self.backbones)>1:
+            # Image observation features and position embeddings
+            all_cam_features = []
+            all_cam_pos = []
+            for cam_id, _ in enumerate(self.camera_names):
+                features, pos = self.backbones[cam_id](image[:, cam_id])
+                features = features[0] # take the last layer feature
+                pos = pos[0]
+                all_cam_features.append(self.input_proj(features))
+                all_cam_pos.append(pos)
+        else:
+            all_cam_features = []
+            all_cam_pos = []
+            if self.feature_loss and self.training:
+                all_cam_features_future = []
+                bs,_,_,h,w = image.shape
+                image_total = torch.cat([image, image_future], axis=0) #cat along the batch dimension
+                bs_t,_,_,h_t,w_t = image_total.shape
+                features, pos = self.backbones[0](image_total.reshape([-1,3,image_total.shape[-2],image_total.shape[-1]]))
+                project_feature = self.input_proj(features[0])
+                project_feature = project_feature.reshape([bs_t, self.cam_num,project_feature.shape[1],project_feature.shape[2],project_feature.shape[3]])
+                for i in range(self.cam_num):
+                    all_cam_features.append(project_feature[:bs,i,:])
+                    all_cam_pos.append(pos[0])
+                    all_cam_features_future.append(project_feature[bs:,i,:])
+            else:
+                bs,_,_,h,w = image.shape
+                features, pos = self.backbones[0](image.reshape([-1,3,image.shape[-2],image.shape[-1]]))
+                project_feature = self.input_proj(features[0]) 
+                project_feature = project_feature.reshape([bs, self.cam_num,project_feature.shape[1],project_feature.shape[2],project_feature.shape[3]])
+                for i in range(self.cam_num):
+                    all_cam_features.append(project_feature[:,i,:])
+                    all_cam_pos.append(pos[0])
+        # proprioception features
+        proprio_input = self.input_proj_robot_state(qpos) #B, 512
+        # fold camera dimension into width dimension
+        src = torch.cat(all_cam_features, axis=3) #B, 512,12,26
+        pos = torch.cat(all_cam_pos, axis=3) #B, 512,12,26
+        hs = self.transformer_decoder(src, self.query_embed.weight, proprio_input=proprio_input, pos_embed=pos, additional_pos_embed=self.additional_pos_embed.weight) #B, chunk_size, 512
+        # a_hat = self.action_head(hs) #B, chunk_size, action_dim
+        hs_action = hs[:,-1*self.num_queries:,:].clone() #B, action_dim, 512
+        hs_img = hs[:,1:-1*self.num_queries,:].clone() #B, image_feature_dim, 512 #final image feature
+        hs_proprio = hs[:,[0],:].clone() #B, proprio_feature_dim, 512
+        a_hat = self.action_head(hs_action)
+        a_proprio = self.proprio_head(hs_proprio) #proprio head
+        if self.feature_loss and self.training:
+            # proprioception features
+            src_future = torch.cat(all_cam_features_future, axis=3) #B, 512,12,26
+            src_future = src_future.flatten(2).permute(2, 0, 1).transpose(1, 0) # B, 12*26, 512
+            hs_img = {'hs_img': hs_img, 'src_future': src_future}
+            
+        return a_hat, a_proprio, hs_img
+    
+ 
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
-
-    def __init__(self, backbones, transformer, encoder, state_dim, action_dim, num_queries,vq, vq_class, vq_dim, camera_names):
+    def __init__(self, backbones, transformer, encoder, state_dim, num_queries, camera_names, vq, vq_class, vq_dim, action_dim):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py
@@ -51,7 +140,8 @@ class DETRVAE(nn.Module):
         self.camera_names = camera_names
         self.transformer = transformer
         self.encoder = encoder
-        self.vq, self.vq_class, self.vq_dim = vq, vq_class, vq_dim  # VQ 参数
+        self.vq, self.vq_class, self.vq_dim = vq, vq_class, vq_dim
+        self.state_dim, self.action_dim = state_dim, action_dim
         hidden_dim = transformer.d_model
         self.action_head = nn.Linear(hidden_dim, action_dim)
         self.is_pad_head = nn.Linear(hidden_dim, 1)
@@ -61,7 +151,6 @@ class DETRVAE(nn.Module):
             self.backbones = nn.ModuleList(backbones)
             self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
         else:
-            # raise NotImplementedError
             # input_dim = 14 + 7 # robot_state + env_state
             self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
             self.input_proj_env_state = nn.Linear(7, hidden_dim)
@@ -69,224 +158,57 @@ class DETRVAE(nn.Module):
             self.backbones = None
 
         # encoder extra parameters
-        self.latent_dim = 32  # final size of latent z # TODO tune
-        self.cls_embed = nn.Embedding(1, hidden_dim)  # extra cls token embedding
-        self.encoder_action_proj = nn.Linear(action_dim, hidden_dim)  # project action to embedding
+        self.latent_dim = 32 # final size of latent z # TODO tune
+        self.cls_embed = nn.Embedding(1, hidden_dim) # extra cls token embedding
+        self.encoder_action_proj = nn.Linear(action_dim, hidden_dim) # project action to embedding
         self.encoder_joint_proj = nn.Linear(state_dim, hidden_dim)  # project qpos to embedding
-        self.latent_proj = nn.Linear(hidden_dim, self.latent_dim * 2)  # project hidden state to latent std, var
-        self.register_buffer('pos_table', get_sinusoid_encoding_table(1 + 1 + num_queries, hidden_dim))  # [CLS], qpos, a_seq
 
-        # decoder extra parameters
-        self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim)  # project latent sample to embedding
-        self.additional_pos_embed = nn.Embedding(2, hidden_dim)  # learned position embedding for proprio and latent
-
-    def forward(self, qpos, image, env_state, actions=None, is_pad=None, vq_sample=None):
-        """
-        qpos: batch, qpos_dim
-        image: batch, num_cam, channel, height, width
-        env_state: None
-        actions: batch, seq, action_dim
-        """
-        is_training = actions is not None  # train or val
-        bs, _ = qpos.shape
-        ### Obtain latent z from action sequence
-        if is_training:
-            # project action sequence to embedding dim, and concat with a CLS token
-            action_embed = self.encoder_action_proj(actions)  # (bs, seq, hidden_dim)
-            qpos_embed = self.encoder_joint_proj(qpos)  # (bs, hidden_dim)
-            qpos_embed = torch.unsqueeze(qpos_embed, axis=1)  # (bs, 1, hidden_dim)
-            cls_embed = self.cls_embed.weight  # (1, hidden_dim)
-            cls_embed = torch.unsqueeze(cls_embed, axis=0).repeat(bs, 1, 1)  # (bs, 1, hidden_dim)
-            encoder_input = torch.cat([cls_embed, qpos_embed, action_embed], axis=1)  # (bs, seq+1, hidden_dim)
-            encoder_input = encoder_input.permute(1, 0, 2)  # (seq+1, bs, hidden_dim)
-            # do not mask cls token
-            cls_joint_is_pad = torch.full((bs, 2), False).to(qpos.device)  # False: not a padding
-            is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)  # (bs, seq+1)
-            # obtain position embedding
-            pos_embed = self.pos_table.clone().detach()
-            pos_embed = pos_embed.permute(1, 0, 2)  # (seq+1, 1, hidden_dim)
-            # query model
-            encoder_output = self.encoder(encoder_input, pos=pos_embed, src_key_padding_mask=is_pad)
-            encoder_output = encoder_output[0]  # take cls output only
-            latent_info = self.latent_proj(encoder_output)
-            probs = binaries = None
-            mu = latent_info[:, :self.latent_dim]
-            logvar = latent_info[:, self.latent_dim:]
-            latent_sample = reparametrize(mu, logvar)
-            latent_input = self.latent_out_proj(latent_sample)
-        else:
-            probs = binaries = mu = logvar = None
-            latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(qpos.device)
-            latent_input = self.latent_out_proj(latent_sample)
-
-        if self.backbones is not None:
-            # Image observation features and position embeddings
-            all_cam_features = []
-            all_cam_pos = []
-            # featuress, poss = self.backbones[0](image.flatten(0, 1))  # HARDCODED
-            # featuress = featuress[0].view(image.shape[0], 2, 384, 16, 22)  # take the last layer feature
-            # pos = poss[0]
-            # for cam_id, cam_name in enumerate(self.camera_names):
-            #     # start = time.time()
-            #     # import ipdb; ipdb.set_trace()
-            #     features = featuress[:, cam_id]  # HARDCODED
-            #     # features, pos = self.backbones[cam_id](image[:, cam_id]) # HARDCODED
-            #     # print("Time for 1 backbone: ", time.time() - start, image.shape)
-            #     # features = features[0] # take the last layer feature
-            #     # pos = pos[0]
-            #     all_cam_features.append(self.input_proj(features))
-            #     all_cam_pos.append(pos / 2 + cam_id - 0.5)
-            #     # break
-
-            for cam_id, cam_name in enumerate(self.camera_names):
-                features, pos = self.backbones[0](image[:, cam_id]) # HARDCODED
-                features = features[0] # take the last layer feature
-                pos = pos[0]
-                all_cam_features.append(self.input_proj(features))
-                all_cam_pos.append(pos)
-
-            # proprioception features
-            proprio_input = self.input_proj_robot_state(qpos)
-            # fold camera dimension into width dimension
-            src = torch.cat(all_cam_features, axis=3)
-            pos = torch.cat(all_cam_pos, axis=3)
-            hs = self.transformer(src, None, self.query_embed.weight, pos, latent_input, proprio_input, self.additional_pos_embed.weight)[0]
-        else:
-            # raise NotImplementedError
-            qpos = self.input_proj_robot_state(qpos)
-            env_state = self.input_proj_env_state(env_state)
-            transformer_input = torch.cat([qpos, env_state], axis=1)  # seq length = 2
-            hs = self.transformer(transformer_input, None, self.query_embed.weight, self.pos.weight)[0]
-        a_hat = self.action_head(hs)
-        is_pad_hat = self.is_pad_head(hs)
-        return a_hat, is_pad_hat, [mu, logvar], probs, binaries
-
-class DETR_VAE(nn.Module):
-    """ DETR 模块，带有变分自编码器 (VAE) 架构，用于目标检测 """
-
-    def __init__(self, backbones, transformer, encoder, state_dim, num_queries, camera_names, vq, vq_class, vq_dim, action_dim):
-        """
-        初始化模型。
-        参数：
-            backbones: 用于特征提取的骨干网络模块列表，每个相机对应一个模块。
-            transformer: Transformer 模块，用于特征处理和基于查询的检测。
-            encoder: （可选）用于潜在空间建模的编码器（例如 CVAE 中的编码器）。
-            state_dim: 机器人状态的维度。
-            num_queries: 最大的目标查询数量，即检测槽位。最大检测对象数。
-            camera_names: 与骨干网络对应的相机名称列表。
-            vq: 是否在潜在空间中使用向量量化 (Vector Quantization)。
-            vq_class: VQ 中类别的数量。
-            vq_dim: 每个 VQ 向量的维度。
-            action_dim: 动作空间的维度。
-        """
-        super().__init__()
-        self.num_queries = num_queries  # 查询数量（检测目标的最大数量）
-        self.camera_names = camera_names  # 相机名称列表
-        self.transformer = transformer  # Transformer 模块
-        self.encoder = encoder  # 编码器模块（CVAE 中的 encoder）
-        self.vq, self.vq_class, self.vq_dim = vq, vq_class, vq_dim  # VQ 参数
-        self.state_dim, self.action_dim = state_dim, action_dim  # 状态维度和动作维度
-
-        # Transformer 的隐藏维度（d_model）
-        hidden_dim = transformer.d_model
-
-        # 动作预测头：将 Transformer 的输出映射到动作空间
-        self.action_head = nn.Linear(hidden_dim, action_dim)
-        # 用于判断 padding 的预测头
-        self.is_pad_head = nn.Linear(hidden_dim, 1)
-
-        # 查询嵌入，用于目标检测的查询
-        self.query_embed = nn.Embedding(num_queries, hidden_dim)
-
-        # 如果有骨干网络（用于处理图像输入）
-        if backbones is not None:
-            # 将骨干网络的输出通道数投影到 Transformer 的隐藏维度
-            self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
-            self.backbones = nn.ModuleList(backbones)  # 保存多个骨干网络
-            # 将机器人状态映射到 Transformer 的隐藏维度
-            self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
-        else:
-            # 如果没有骨干网络，则可能是基于状态的模型
-            self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
-            self.input_proj_env_state = nn.Linear(7, hidden_dim)  # 环境状态映射
-            self.pos = torch.nn.Embedding(2, hidden_dim)  # 位置编码（仅用于状态）
-            self.backbones = None
-
-        # 编码器额外参数
-        self.latent_dim = 32  # 潜在空间的维度（可调节）
-        self.cls_embed = nn.Embedding(1, hidden_dim)  # 分类令牌嵌入
-        self.encoder_action_proj = nn.Linear(action_dim, hidden_dim)  # 将动作嵌入到 Transformer 的隐藏维度
-        self.encoder_joint_proj = nn.Linear(state_dim, hidden_dim)  # 将机器人状态（关节位置）嵌入到隐藏维度
-
-        # 打印 VQ 使用信息
-        # print(f'Use VQ: {self.vq}, {self.vq_class}, {self.vq_dim}')
+        print(f'Use VQ: {self.vq}, {self.vq_class}, {self.vq_dim}')
         if self.vq:
-            # 如果使用 VQ，将隐藏状态投影到 VQ 空间
             self.latent_proj = nn.Linear(hidden_dim, self.vq_class * self.vq_dim)
         else:
-            # 如果不使用 VQ，将隐藏状态投影到潜在均值和方差
-            self.latent_proj = nn.Linear(hidden_dim, self.latent_dim * 2)
+            self.latent_proj = nn.Linear(hidden_dim, self.latent_dim*2) # project hidden state to latent std, var
+        self.register_buffer('pos_table', get_sinusoid_encoding_table(1+1+num_queries, hidden_dim)) # [CLS], qpos, a_seq
 
-        # 注册位置编码表（包括 [CLS] 和查询嵌入）
-        self.register_buffer('pos_table', get_sinusoid_encoding_table(1 + 1 + num_queries, hidden_dim))
-
-        # 解码器额外参数
+        # decoder extra parameters
         if self.vq:
-            # 如果使用 VQ，将 VQ 输出映射回隐藏维度
             self.latent_out_proj = nn.Linear(self.vq_class * self.vq_dim, hidden_dim)
         else:
-            # 如果不使用 VQ，将潜在样本映射回隐藏维度
-            self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim)
+            self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim) # project latent sample to embedding
+        self.additional_pos_embed = nn.Embedding(2, hidden_dim) # learned position embedding for proprio and latent
 
-        # 额外位置嵌入，用于机器人状态和潜在变量
-        self.additional_pos_embed = nn.Embedding(2, hidden_dim)
 
     def encode(self, qpos, actions=None, is_pad=None, vq_sample=None):
-        """
-        编码阶段：处理机器人状态、动作序列并生成潜在空间的输入。
-        参数：
-            qpos: 机器人状态（关节位置），形状为 (batch_size, state_dim)。
-            actions: 动作序列，形状为 (batch_size, seq_len, action_dim)。
-            is_pad: 动作序列的 padding mask，形状为 (batch_size, seq_len)。
-            vq_sample: 可选的 VQ 样本，用于推理阶段。
-        """
-        bs, _ = qpos.shape  # 获取 batch 大小
-        if self.encoder is None:  # 如果没有编码器
-            # 生成一个全零的潜在变量样本
+        bs, _ = qpos.shape
+        if self.encoder is None:
             latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(qpos.device)
             latent_input = self.latent_out_proj(latent_sample)
             probs = binaries = mu = logvar = None
         else:
-            # CVAE 编码器处理
-            is_training = actions is not None  # 判断是训练模式还是推理模式
+            # cvae encoder
+            is_training = actions is not None # train or val
+            ### Obtain latent z from action sequence
             if is_training:
-                # print(f"is_training_{qpos.shape}")
-                # 将动作序列投影到嵌入维度，并与分类令牌和状态嵌入拼接
-                action_embed = self.encoder_action_proj(actions)  # 动作序列嵌入
-                qpos_embed = self.encoder_joint_proj(qpos)  # 关节位置嵌入
-                qpos_embed = torch.unsqueeze(qpos_embed, axis=1)  # 添加序列维度
-                cls_embed = self.cls_embed.weight  # 分类令牌嵌入
-                cls_embed = torch.unsqueeze(cls_embed, axis=0).repeat(bs, 1, 1)  # 扩展为批次大小
-                encoder_input = torch.cat([cls_embed, qpos_embed, action_embed], axis=1)  # 拼接输入
-                encoder_input = encoder_input.permute(1, 0, 2)  # 转换为 (seq_len, batch_size, hidden_dim)
-
-                # Mask 的处理，确保分类令牌和状态不被 mask
-                cls_joint_is_pad = torch.full((bs, 2), False).to(qpos.device)
-                is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)
-
-                # 获取位置编码
+                # project action sequence to embedding dim, and concat with a CLS token
+                action_embed = self.encoder_action_proj(actions) # (bs, seq, hidden_dim)
+                qpos_embed = self.encoder_joint_proj(qpos)  # (bs, hidden_dim)
+                qpos_embed = torch.unsqueeze(qpos_embed, axis=1)  # (bs, 1, hidden_dim)
+                cls_embed = self.cls_embed.weight # (1, hidden_dim)
+                cls_embed = torch.unsqueeze(cls_embed, axis=0).repeat(bs, 1, 1) # (bs, 1, hidden_dim)
+                encoder_input = torch.cat([cls_embed, qpos_embed, action_embed], axis=1) # (bs, seq+1, hidden_dim)
+                encoder_input = encoder_input.permute(1, 0, 2) # (seq+1, bs, hidden_dim)
+                # do not mask cls token
+                cls_joint_is_pad = torch.full((bs, 2), False).to(qpos.device) # False: not a padding
+                is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)  # (bs, seq+1)
+                # obtain position embedding
                 pos_embed = self.pos_table.clone().detach()
-                pos_embed = pos_embed.permute(1, 0, 2)
-
-                # 通过编码器
+                pos_embed = pos_embed.permute(1, 0, 2)  # (seq+1, 1, hidden_dim)
+                # query model
                 encoder_output = self.encoder(encoder_input, pos=pos_embed, src_key_padding_mask=is_pad)
-                encoder_output = encoder_output[0]  # 只取分类令牌的输出
-
-                # 获取潜在空间信息
+                encoder_output = encoder_output[0] # take cls output only
                 latent_info = self.latent_proj(encoder_output)
-
+                
                 if self.vq:
-                    # 如果使用 VQ，执行向量量化
                     logits = latent_info.reshape([*latent_info.shape[:-1], self.vq_class, self.vq_dim])
                     probs = torch.softmax(logits, dim=-1)
                     binaries = F.one_hot(torch.multinomial(probs.view(-1, self.vq_dim), 1).squeeze(-1), self.vq_dim).view(-1, self.vq_class, self.vq_dim).float()
@@ -296,7 +218,6 @@ class DETR_VAE(nn.Module):
                     latent_input = self.latent_out_proj(straigt_through)
                     mu = logvar = None
                 else:
-                    # 不使用 VQ，生成均值和方差
                     probs = binaries = None
                     mu = latent_info[:, :self.latent_dim]
                     logvar = latent_info[:, self.latent_dim:]
@@ -304,7 +225,6 @@ class DETR_VAE(nn.Module):
                     latent_input = self.latent_out_proj(latent_sample)
 
             else:
-                # 推理模式，仅使用潜在样本
                 mu = logvar = binaries = probs = None
                 if self.vq:
                     latent_input = self.latent_out_proj(vq_sample.view(-1, self.vq_class * self.vq_dim))
@@ -316,45 +236,49 @@ class DETR_VAE(nn.Module):
 
     def forward(self, qpos, image, env_state, actions=None, is_pad=None, vq_sample=None):
         """
-        前向传播：从输入生成动作预测和 padding 标志。
-        参数：
-            qpos: 机器人状态，形状为 (batch_size, state_dim)。
-            image: 图像输入，形状为 (batch_size, num_cameras, channels, height, width)。
-            env_state: 环境状态（如果存在）。
-            actions: 动作序列，形状为 (batch_size, seq_len, action_dim)。
-            is_pad: 动作序列的 padding 标志。
-            vq_sample: VQ 的潜在样本（推理时可用）。
+        qpos: batch, qpos_dim
+        image: batch, num_cam, channel, height, width
+        env_state: None
+        actions: batch, seq, action_dim
         """
-        # 编码阶段，获取潜在变量输入
         latent_input, probs, binaries, mu, logvar = self.encode(qpos, actions, is_pad, vq_sample)
 
-        # 解码阶段
-        if self.backbones is not None:  # 如果使用了骨干网络处理图像
-            # 处理每个相机的图像特征和位置编码
-            all_cam_features = []
-            all_cam_pos = []
-            for cam_id, cam_name in enumerate(self.camera_names):
-                # features, pos = self.backbones[cam_id](image[:, cam_id])
-                features, pos = self.backbones[0](image[:, cam_id])
-
-                features = features[0]  # 使用最后一层特征
-                pos = pos[0]
-                all_cam_features.append(self.input_proj(features))
-                all_cam_pos.append(pos)
-            # 处理机器人状态特征
+        # cvae decoder
+        # t = time.time()
+        if self.backbones is not None:
+            if len(self.backbones)>1:
+                # Image observation features and position embeddings
+                all_cam_features = []
+                all_cam_pos = []
+                for cam_id, cam_name in enumerate(self.camera_names):
+                    features, pos = self.backbones[cam_id](image[:, cam_id])
+                    features = features[0] # take the last layer feature
+                    pos = pos[0]
+                    all_cam_features.append(self.input_proj(features))
+                    all_cam_pos.append(pos)
+            else:
+                all_cam_features = []
+                all_cam_pos = []
+                bs,_,_,h,w = image.shape
+                features, pos = self.backbones[0](image.reshape([-1,3,image.shape[-2],image.shape[-1]]))
+                project_feature = self.input_proj(features[0]) 
+                project_feature = project_feature.reshape([bs, 2,project_feature.shape[1],project_feature.shape[2],project_feature.shape[3]])
+                all_cam_features.append(project_feature[:,0,:])
+                all_cam_features.append(project_feature[:,1,:])
+                all_cam_pos.append(pos[0])
+                all_cam_pos.append(pos[0])
+            # print(f'backbone time: {time.time()-t}')
+            # proprioception features
             proprio_input = self.input_proj_robot_state(qpos)
-            # 将所有相机特征合并
+            # fold camera dimension into width dimension
             src = torch.cat(all_cam_features, axis=3)
             pos = torch.cat(all_cam_pos, axis=3)
-            # 通过 Transformer
             hs = self.transformer(src, None, self.query_embed.weight, pos, latent_input, proprio_input, self.additional_pos_embed.weight)[0]
-        else:  # 如果没有骨干网络，仅基于状态进行推理
+        else:
             qpos = self.input_proj_robot_state(qpos)
             env_state = self.input_proj_env_state(env_state)
-            transformer_input = torch.cat([qpos, env_state], axis=1)  # 序列长度为 2
+            transformer_input = torch.cat([qpos, env_state], axis=1) # seq length = 2
             hs = self.transformer(transformer_input, None, self.query_embed.weight, self.pos.weight)[0]
-
-        # 动作预测和 padding 标志预测
         a_hat = self.action_head(hs)
         is_pad_hat = self.is_pad_head(hs)
         return a_hat, is_pad_hat, [mu, logvar], probs, binaries
@@ -374,7 +298,7 @@ class CNNMLP(nn.Module):
         """
         super().__init__()
         self.camera_names = camera_names
-        self.action_head = nn.Linear(1000, state_dim)  # TODO add more
+        self.action_head = nn.Linear(1000, state_dim) # TODO add more
         if backbones is not None:
             self.backbones = nn.ModuleList(backbones)
             backbone_down_projs = []
@@ -399,21 +323,21 @@ class CNNMLP(nn.Module):
         env_state: None
         actions: batch, seq, action_dim
         """
-        is_training = actions is not None  # train or val
+        is_training = actions is not None # train or val
         bs, _ = qpos.shape
         # Image observation features and position embeddings
         all_cam_features = []
         for cam_id, cam_name in enumerate(self.camera_names):
             features, pos = self.backbones[cam_id](image[:, cam_id])
-            features = features[0]  # take the last layer feature
-            pos = pos[0]  # not used
+            features = features[0] # take the last layer feature
+            pos = pos[0] # not used
             all_cam_features.append(self.backbone_down_projs[cam_id](features))
         # flatten everything
         flattened_features = []
         for cam_feature in all_cam_features:
             flattened_features.append(cam_feature.reshape([bs, -1]))
-        flattened_features = torch.cat(flattened_features, axis=1)  # 768 each
-        features = torch.cat([flattened_features, qpos], axis=1)  # qpos: 14
+        flattened_features = torch.cat(flattened_features, axis=1) # 768 each
+        features = torch.cat([flattened_features, qpos], axis=1) # qpos: 14
         a_hat = self.mlp(features)
         return a_hat
 
@@ -431,78 +355,76 @@ def mlp(input_dim, hidden_dim, output_dim, hidden_depth):
 
 
 def build_encoder(args):
-    # 从传入的参数中获取 encoder 的超参数配置
-    d_model = args.hidden_dim  # 隐藏层的维度（例如256）
-    dropout = args.dropout  # dropout 概率（例如0.1.md，用于防止过拟合）
-    nhead = args.nheads  # Transformer 中的多头注意力机制中的头数（例如8）
-    dim_feedforward = args.dim_feedforward  # 前馈网络的维度（例如2048）
-    num_encoder_layers = args.enc_layers  # 编码器的层数（例如4层）
-    normalize_before = args.pre_norm  # 是否在层归一化之前执行（True/False）
-    activation = "relu"  # 激活函数（默认是 ReLU）
+    d_model = args.hidden_dim # 256
+    dropout = args.dropout # 0.1
+    nhead = args.nheads # 8
+    dim_feedforward = args.dim_feedforward # 2048
+    num_encoder_layers = args.enc_layers # 4 # TODO shared with VAE decoder
+    normalize_before = args.pre_norm # False
+    activation = "relu"
 
-    # 创建单个 TransformerEncoderLayer，这一层定义了多头自注意力和前馈网络
     encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,
                                             dropout, activation, normalize_before)
-
-    # 如果设置了 `normalize_before`，则为编码器添加层归一化，否则不添加
     encoder_norm = nn.LayerNorm(d_model) if normalize_before else None
-
-    # 使用多层 Transformer 编码器，层数由 `num_encoder_layers` 指定
     encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
-    # 返回构建的编码器
     return encoder
 
 
 def build(args):
-    # 设置状态维度为14。 TODO: 后期可能需要调整或动态计算
-    state_dim = 14  # TODO hardcode
+    state_dim = args.state_dim # TODO hardcode
 
-    # 初始化一个列表来存储每个相机的 backbone（特征提取网络）
+    # From state
+    # backbone = None # from state for now, no need for conv nets
+    # From image
     backbones = []
-    backbone = build_backbone(args)
-    backbones.append(backbone)
-    # for _ in args.camera_names:  # 针对每个相机名称
-    #     # 为每个相机构建一个 backbone（特征提取网络）
-    #     backbone = build_backbone(args)
-    #     backbones.append(backbone)
+    if args.same_backbones:
+        backbone = build_backbone(args)
+        backbones = [backbone]
+    else:
+        for _ in args.camera_names:
+            backbone = build_backbone(args)
+            backbones.append(backbone)
+        
+    if args.no_encoder:
+        encoder = None
+    else:
+        encoder = build_transformer(args)
 
-    # 构建 transformer 模型
-    transformer = build_transformer(args)
-    encoder = build_encoder(args)
-    # 根据 `args.no_encoder` 的值来决定是否构建编码器（encoder）
-    # if args.no_encoder:
-    #     encoder = None  # 如果不需要编码器，设置为 None
-    # else:
-    #     # 如果需要编码器，调用 `build_encoder` 来构建
-    #     encoder = build_transformer(args)
+    if args.model_type=="ACT":
+        transformer = build_transformer(args)
+        model = DETRVAE(
+            backbones,
+            transformer,
+            encoder,
+            state_dim=state_dim,
+            num_queries=args.num_queries,
+            camera_names=args.camera_names,
+            vq=args.vq,
+            vq_class=args.vq_class,
+            vq_dim=args.vq_dim,
+            action_dim=args.action_dim,
+        )
+    elif args.model_type=="HIT":
+        transformer_decoder = build_transformer_decoder(args)
 
-    # 创建 DETRVAE 模型，并将所有组件传入
-    model = DETRVAE(
-        backbones,  # 每个相机的 backbone
-        transformer,  # transformer 模型
-        encoder,  # 编码器，可能为 None
-        state_dim=args.state_dim,  # 状态维度
-        num_queries=args.num_queries,  # 查询数量
-        camera_names=args.camera_names,  # 相机名称列表
-        vq=args.vq,  # 是否使用矢量量化（vector quantization）# 是否使用矢量量化（vector quantization）
-        vq_class=args.vq_class,  # 矢量量化的类别数
-        vq_dim=args.vq_dim,  # 矢量量化的维度
-        action_dim=args.action_dim,  # 动作维度
-    )
-
-    # 计算模型的参数总数
+        model = DETRVAE_Decoder(
+            backbones,
+            transformer_decoder,
+            state_dim=state_dim,
+            num_queries=args.num_queries,
+            camera_names=args.camera_names,
+            action_dim=args.action_dim,
+            feature_loss= args.feature_loss if hasattr(args, 'feature_loss') else False,
+        )
+    
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print("number of parameters: %.2fM" % (n_parameters/1e6,))
 
-    # 打印模型的参数数量（以百万为单位）
-    # print("number of parameters: %.2fM" % (n_parameters / 1e6,))
-
-    # 返回构建好的模型
     return model
 
-
 def build_cnnmlp(args):
-    state_dim = 14  # TODO hardcode
+    state_dim = 14 # TODO hardcode
 
     # From state
     # backbone = None # from state for now, no need for conv nets
@@ -519,7 +441,7 @@ def build_cnnmlp(args):
     )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print("number of parameters: %.2fM" % (n_parameters / 1e6,))
+    print("number of parameters: %.2fM" % (n_parameters/1e6,))
 
     return model
 

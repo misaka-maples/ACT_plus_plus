@@ -12,24 +12,38 @@ from einops import rearrange
 import time
 from utils import load_data  # data functions
 from utils import compute_dict_mean, set_seed, detach_dict, calibrate_linear_vel, postprocess_base_action  # helper functions
-from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
+if False:
+    from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy,HITPolicy
+from policy_origin import ACTPolicy,CNNMLPPolicy,DiffusionPolicy
 from visualize_episodes import save_videos
 from detr.models.latent_model import Latent_Model_Transformer
 import wandb
+# 限制 PyTorch 只能看到 GPU 1
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
+# 重新获取 GPU 设备索引
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# print(f"当前使用的 GPU: {device}")
+print(f"当前 GPU 名称: {torch.cuda.get_device_name(0)}")
+
+# print(f"PyTorch 看到的 GPU 数量: {torch.cuda.device_count()}")
+# for i in range(torch.cuda.device_count()):
+#     print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
+
 server = "192.168.2.120"
 class Train:
     def __init__(self):
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/hdf5_file/3_4-1/act",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/hdf5_file/3_4-1",#数据集路径
+            'ckpt_dir': "/workspace/exchange/hdf5_file/4_4-1/act",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/hdf5_file/4_4-1",#数据集路径
             'policy_class': 'ACT',
             'task_name': 'train',
-            'batch_size': 4,
-            'seed': 0,
-            'num_steps': 60000,
-            'lr': 2e-5,
+            'batch_size': 2,
+            'seed': 8,
+            'num_steps': 80000,
+            'lr': 1e-5,
             'kl_weight': 10,
             'load_pretrain': False,
             'eval_every': 500,
@@ -47,16 +61,16 @@ class Train:
             'vq_class': None,
             'vq_dim': None,
             'vq': False,
-            'no_encoder': False,
-            'worker_num': 8,
-            'chunk_size': 90,
-            'num_queries':90,
+            'no_encoder': True,
+            'worker_num': 1,
+            'chunk_size': 120,
+            'num_queries':120,
             'hidden_dim': 512,
             'state_dim': 9,
             'action_dim': 11,
             'dim_feedforward': 3200,
             'num_heads': 8,
-            'backbone': 'resnet18',
+            'backbone': 'resnet50',
             # 'lr_backbone': 1e-5,
             'episode_len': 400,
             'drop_out':0.3,
@@ -259,6 +273,8 @@ class Train:
             policy = ACTPolicy(self.args)
         elif self.args['policy_class'] == 'CNNMLP':
             policy = CNNMLPPolicy(self.args)
+        # elif self.args['policy_class'] == 'HIT':
+        #     policy = HITPolicy(self.args)
         elif self.args['policy_class'] == 'Diffusion':
             policy = DiffusionPolicy(self.args)
         else:
@@ -266,6 +282,8 @@ class Train:
         return policy
     def make_optimizer(self,policy):
         if self.args['policy_class'] == 'ACT':
+            optimizer = policy.configure_optimizers()
+        elif self.args['policy_class'] == 'HIT':
             optimizer = policy.configure_optimizers()
         elif self.args['policy_class'] == 'CNNMLP':
             optimizer = policy.configure_optimizers()

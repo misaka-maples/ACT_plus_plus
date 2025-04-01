@@ -11,6 +11,7 @@ e = IPython.embed
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Set transformer detector', add_help=False)
+    parser.add_argument('--config', action='store', type=str, help='config file', required=False)
     parser.add_argument('--lr', default=1e-4, type=float) # will be overridden
     parser.add_argument('--lr_backbone', default=1e-5, type=float) # will be overridden
     parser.add_argument('--batch_size', default=2, type=int) # not used
@@ -36,9 +37,9 @@ def get_args_parser():
                         help="Number of encoding layers in the transformer")
     parser.add_argument('--dec_layers', default=6, type=int, # will be overridden
                         help="Number of decoding layers in the transformer")
-    parser.add_argument('--dim_feedforward', default=3200, type=int, # will be overridden
+    parser.add_argument('--dim_feedforward', default=2048, type=int, # will be overridden
                         help="Intermediate size of the feedforward layers in the transformer blocks")
-    parser.add_argument('--hidden_dim', default=512, type=int, # will be overridden
+    parser.add_argument('--hidden_dim', default=256, type=int, # will be overridden
                         help="Size of the embeddings (dimension of the transformer)")
     parser.add_argument('--dropout', default=0.1, type=float,
                         help="Dropout applied in the transformer")
@@ -55,17 +56,16 @@ def get_args_parser():
     # repeat args in imitate_episodes just to avoid error. Will not be used
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--onscreen_render', action='store_true')
-    parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir', required=False)
-    parser.add_argument('--policy_class', action='store', type=str, help='policy_class, capitalize', required=False)
-    parser.add_argument('--task_name', action='store', type=str, help='task_name', required=False)
-    parser.add_argument('--seed', action='store', type=int, help='seed', required=False)
-    parser.add_argument('--num_steps', action='store', type=int, help='num_epochs', required=False)
+    parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir')
+    parser.add_argument('--policy_class', action='store', type=str, help='policy_class, capitalize')
+    parser.add_argument('--task_name', action='store', type=str, help='task_name')
+    parser.add_argument('--seed', action='store', type=int, help='seed')
+    parser.add_argument('--num_steps', action='store', type=int, help='num_epochs')
     parser.add_argument('--kl_weight', action='store', type=int, help='KL Weight', required=False)
     parser.add_argument('--chunk_size', action='store', type=int, help='chunk_size', required=False)
     parser.add_argument('--temporal_agg', action='store_true')
     
-    parser.add_argument('--use_vq', default=False , action='store_true')
-    parser.add_argument('--vq', default=False , action='store_true')
+    parser.add_argument('--use_vq', action='store_true')
     parser.add_argument('--vq_class', action='store', type=int, help='vq_class', required=False)
     parser.add_argument('--vq_dim', action='store', type=int, help='vq_dim', required=False)
     parser.add_argument('--load_pretrain', action='store_true', default=False)
@@ -80,62 +80,62 @@ def get_args_parser():
     parser.add_argument('--history_len', action='store', type=int)
     parser.add_argument('--future_len', action='store', type=int)
     parser.add_argument('--prediction_len', action='store', type=int)
+    
+    
+    #model_type
+    parser.add_argument('--model_type', action='store', type=str, default="HIT" ,help='model_type', required=False)
+    parser.add_argument('--context_len', action='store', type=int, default=481, help='context_len', required=False)
+    parser.add_argument('--use_pos_embd_image', action='store', type=int, default=0, required=False)
+    parser.add_argument('--use_pos_embd_action', action='store', type=int, default=0, required=False)
 
+    parser.add_argument('--feature_loss_weight', action='store', type=float, default=0.0, required=False)
+    parser.add_argument('--self_attention', action='store', type=int, default=1, required=False)
+    parser.add_argument('--use_mask', action='store_true')
+    parser.add_argument('--pretrained_path', action='store', type=str, required=False)
+    parser.add_argument('--randomize_color', action='store_true')
+    parser.add_argument('--randomize_data', action='store_true')
+    parser.add_argument('--randomize_data_degree', action='store', type=int, default=3)
+    
+    
+    ##dummpy args
+    parser.add_argument('--width', type=int, default=640)
+    parser.add_argument('--height', type=int, default=360)
+    parser.add_argument('--data_aug', action='store_true')
+    parser.add_argument('--normalize_resnet', action='store_true')
+    parser.add_argument('--wandb', action='store_true')
+    parser.add_argument('--same_backbones', action='store_true')
+    #grayscale
+    parser.add_argument('--grayscale', action='store_true')
+    
+    parser.add_argument('--gpu_id', type=int, default=0)
     return parser
 
 
 def build_ACT_model_and_optimizer(args_override):
-    """
-    根据输入参数构建 ACT 模型及其优化器。
-
-    参数：
-    - args_override: 字典形式，包含覆盖默认参数的键值对。
-
-    返回：
-    - model: 构建好的 ACT 模型实例，且已迁移到 GPU。
-    - optimizer: 为模型配置的优化器。
-    """
-
-    # 1.md. 初始化命令行参数解析器并获取默认参数
-
-    parser = argparse.ArgumentParser(
-        'DETR training and evaluation script',
-        parents=[get_args_parser()]  # 假定 `get_args_parser()` 返回一个参数解析器
-    )
+    parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
 
-    # 2. 使用 `args_override` 中的参数覆盖默认解析器的参数
     for k, v in args_override.items():
-        setattr(args, k, v)  # 将键值对赋值给 `args` 对象的属性
-    # print(f"Args: {args.state_dim}")
-    # print(f"args:{args}")
-    # 3. 调用模型构建函数，构建 ACT 模型
-    model = build_ACT_model(args)  # 假定 `build_ACT_model` 是已定义的函数
-    model.cuda()  # 将模型迁移到 GPU
+        print(f"Setting {k} to {v}")
+        try:
+            setattr(args, k, v)
+        except:
+            print(f"Error setting {k} to {v}")
 
-    # 4. 准备模型参数分组
+    model = build_ACT_model(args)
+    model.cuda()
+
     param_dicts = [
+        {"params": [p for n, p in model.named_parameters() if "backbone" not in n and p.requires_grad]},
         {
-            # 非 `backbone` 模块的参数，学习率为全局的 `args.lr`
-            "params": [p for n, p in model.named_parameters() if "backbone" not in n and p.requires_grad]
-        },
-        {
-            # `backbone` 模块的参数，使用单独的学习率 `args.lr_backbone`
             "params": [p for n, p in model.named_parameters() if "backbone" in n and p.requires_grad],
             "lr": args.lr_backbone,
         },
     ]
+    optimizer = torch.optim.AdamW(param_dicts, lr=args.lr,
+                                  weight_decay=args.weight_decay)
 
-    # 5. 配置优化器
-    optimizer = torch.optim.AdamW(
-        param_dicts,  # 使用参数分组
-        lr=args.lr,  # 全局学习率
-        weight_decay=args.weight_decay  # 权重衰减
-    )
-
-    # 6. 返回模型和优化器
     return model, optimizer
-
 
 
 def build_CNNMLP_model_and_optimizer(args_override):

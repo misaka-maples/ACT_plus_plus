@@ -20,7 +20,7 @@ class Causal_Transformer_Block(nn.Module):
             nn.Dropout(DROPOUT_RATE),
         )
 
-        # self.register_buffer("attn_mask", torch.triu(torch.ones(seq_len, seq_len), diagonal=1.md).bool())
+        # self.register_buffer("attn_mask", torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool())
     
     def forward(self, x):
         attn_mask = torch.triu(torch.ones(x.shape[1], x.shape[1], device=x.device, dtype=torch.bool), diagonal=1)
@@ -57,17 +57,7 @@ class Latent_Model_Transformer(nn.Module):
         logits = self.output_layer(x)
 
         return logits
-    def deserialize(self, model_dict):
-        """
-        加载给定的模型状态字典。
-
-        参数：
-        - model_dict: 包含模型权重的状态字典。
-
-        返回：
-        - 加载状态的结果。
-        """
-        return self.load_state_dict(model_dict)
+    
     @torch.no_grad()
     def generate(self, n, temperature=0.1, x=None):
         if x is None:

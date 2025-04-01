@@ -17,7 +17,7 @@ from pathlib import Path
 # get_env()
 root_path = Path(__file__).resolve().parent.parent
 sys.path.append(str(root_path))
-from policy import ACTPolicy
+from policy_origin import ACTPolicy
 import torch
 import pickle
 import argparse
@@ -43,6 +43,7 @@ class ActionGenerator:
         config_path = os.path.join(self.ckpt_dir, 'config.pkl')
         with open(config_path, 'rb') as f:
             self.config_data = pickle.load(f)
+        self.config_data['temporal_agg'] = False
         # print(self.config_data)
         # 设置配置
         # self.policy_config = {
@@ -142,7 +143,23 @@ class ActionGenerator:
             self.query_frequency=1
             # self.query_frequency = args['chunk_size']
         # 查询策略模型
+        # print(self.config_data['policy_class'])
+
         if self.config_data['policy_class'] == "ACT":
+            all_actions = self.policy(qpos, curr_image)
+            if self.temporal_agg:
+                self.all_time_actions[[self.t], self.t:self.t + self.num_queries] = all_actions
+                actions_for_curr_step = self.all_time_actions[:, self.t]
+                actions_populated = torch.all(actions_for_curr_step != 0, axis=1)
+                actions_for_curr_step = actions_for_curr_step[actions_populated]
+                k = 0.01
+                exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
+                exp_weights = exp_weights / exp_weights.sum()
+                exp_weights = torch.from_numpy(exp_weights).cuda().unsqueeze(dim=1)
+                raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True)
+            else:
+                raw_action = all_actions[:, self.t % self.query_frequency]
+        elif self.config_data['policy_class'] == "HIT":
             all_actions = self.policy(qpos, curr_image)
             if self.temporal_agg:
                 self.all_time_actions[[self.t], self.t:self.t + self.num_queries] = all_actions

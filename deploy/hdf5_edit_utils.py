@@ -184,7 +184,7 @@ class Modify_hdf5:
                 camera_left_data = f[left][:]
                 qpos = f[qpos][:]
                 actions = f[action][:]
-                print(len(qpos[0]))
+                # print(len(qpos[0]))
                 # print(qpos[0])
                 # print(f"camera_top_data.shape: {camera_top_data.shape}, camera_right_data.shape: {camera_right_data.shape}")
                 if edit:
@@ -557,11 +557,11 @@ if __name__ == '__main__':
     #     'qpos': (45, 100),
     # }
     test = Modify_hdf5()
-    test.modify_hdf5('/workspace/exchange/episode_22.hdf5', compress=False,edit=True)
+    test.modify_hdf5('/workspace/exchange/hdf5_file/2_3-29/hdf5_file/episode_0.hdf5', compress=False,edit=True)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # for i in range(32,53):
-    # test.save_video(r'/home/zhnh/Documents/project/act_arm_project/3_cam_1.2', fps=20, i=1,arm='right')
+    test.save_video(r'/workspace/exchange/hdf5_file/2_3-29/hdf5_file', fps=20, i=0,arm='top')
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀

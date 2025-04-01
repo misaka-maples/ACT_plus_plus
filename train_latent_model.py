@@ -14,7 +14,7 @@ from constants import PUPPET_GRIPPER_JOINT_OPEN
 from utils import load_data # data functions
 from utils import sample_box_pose, sample_insertion_pose # robot functions
 from utils import compute_dict_mean, set_seed, detach_dict # helper functions
-from policy import ACTPolicy, CNNMLPPolicy
+from ACT_plus_plus.policy_origin import ACTPolicy, CNNMLPPolicy
 from visualize_episodes import save_videos
 from detr.models.latent_model import Latent_Model_Transformer
 

@@ -203,7 +203,7 @@ class MetricLogger(object):
         if torch.cuda.is_available():
             log_msg = self.delimiter.join([
                 header,
-                '[{0' + space_fmt + '}/{1.md}]',
+                '[{0' + space_fmt + '}/{1}]',
                 'eta: {eta}',
                 '{meters}',
                 'time: {time}',
@@ -213,7 +213,7 @@ class MetricLogger(object):
         else:
             log_msg = self.delimiter.join([
                 header,
-                '[{0' + space_fmt + '}/{1.md}]',
+                '[{0' + space_fmt + '}/{1}]',
                 'eta: {eta}',
                 '{meters}',
                 'time: {time}',
@@ -340,8 +340,8 @@ def _onnx_nested_tensor_from_tensor_list(tensor_list: List[Tensor]) -> NestedTen
     max_size = tuple(max_size)
 
     # work around for
-    # pad_img[: img.shape[0], : img.shape[1.md], : img.shape[2]].copy_(img)
-    # m[: img.shape[1.md], :img.shape[2]] = False
+    # pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
+    # m[: img.shape[1], :img.shape[2]] = False
     # which is not yet supported in onnx
     padded_imgs = []
     padded_masks = []

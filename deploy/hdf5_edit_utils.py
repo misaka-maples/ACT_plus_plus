@@ -2,7 +2,9 @@ import copy
 import random
 
 import matplotlib.pyplot as plt
-
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 import h5py
 import cv2
 import os
@@ -12,7 +14,7 @@ import traceback
 from constants import RIGHT_ARM_TASK_CONFIGS, HDF5_DIR, DATA_DIR
 camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
 max_timesteps = 0
-atrrbut = [ 'top', 'right', 'left', 'qpos', 'action']
+atrrbut = [ 'top', 'right_wrist', 'left_wrist', 'qpos', 'action']
 class Modify_hdf5:
     def __init__(self, compress=None, truncate_ranges=None, edit=False):
         self.attributes = []
@@ -62,11 +64,11 @@ class Modify_hdf5:
             with h5py.File(file_path, 'r') as f:
                 compressed = f.attrs.get('compress', False)
                 # print(compressed)
-                data = get_key(file_path)
+                data = self.get_key(file_path)
                 # top_paths = [path for path in data if 'top' in path]            # 检查是否存在原始的路径
                 top_paths = [path for path in data if 'top' in path or 'high' in path]
-                right_paths = [path for path in data if 'right' in path]
-                left_paths = [path for path in data if 'left' in path]
+                right_paths = [path for path in data if 'right_wrist' in path]
+                left_paths = [path for path in data if 'left_wrist' in path]
                 print(f"left_paths:{left_paths}")
                 qpos_paths = [path for path in data if 'qpos' in path]
                 action_paths = [path for path in data if 'action' in path]
@@ -145,7 +147,7 @@ class Modify_hdf5:
             with h5py.File(file_path, 'r+') as f:
                 path_collection = []
                 # 检查是否存在原始的路径
-                data = get_key(file_path)
+                data = self.get_key(file_path)
                 for p in data:
                     print(f"已经存在的路径",p)
                 # top_paths = [path for path in data if 'top' in path]            # 检查是否存在原始的路径
@@ -182,6 +184,7 @@ class Modify_hdf5:
                 camera_left_data = f[left][:]
                 qpos = f[qpos][:]
                 actions = f[action][:]
+                print(len(qpos[0]))
                 # print(qpos[0])
                 # print(f"camera_top_data.shape: {camera_top_data.shape}, camera_right_data.shape: {camera_right_data.shape}")
                 if edit:
@@ -227,8 +230,8 @@ class Modify_hdf5:
                     if camera_top_data.shape[1:] == (480, 640, 3) and camera_right_data.shape[1:] == (480, 640, 3):
                         f.attrs['compress'] = False
                     # camera_top_data = decompress_images(camera_top_data)
-                    qpos = qpos[:, :7]
-                    actions = actions[:, :7]
+                    # qpos = qpos[:, :7]
+                    # actions = actions[:, :7]
 
                     # 截断数据，如果指定了截断范围
                     def truncate_data(data, key):
@@ -554,11 +557,11 @@ if __name__ == '__main__':
     #     'qpos': (45, 100),
     # }
     test = Modify_hdf5()
-    test.modify_hdf5('/home/zhnh/Documents/project/act_arm_project/3_cam_1.2/episode_0.hdf5', compress=False,edit=True)
+    test.modify_hdf5('/workspace/exchange/episode_22.hdf5', compress=False,edit=True)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # for i in range(32,53):
-    test.save_video(r'/home/zhnh/Documents/project/act_arm_project/3_cam_1.2', fps=20, i=1,arm='right')
+    # test.save_video(r'/home/zhnh/Documents/project/act_arm_project/3_cam_1.2', fps=20, i=1,arm='right')
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀

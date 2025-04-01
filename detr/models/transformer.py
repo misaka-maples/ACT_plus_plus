@@ -25,7 +25,7 @@ class Transformer(nn.Module):
     """
 
     def __init__(self, d_model=512, nhead=8, num_encoder_layers=6,
-                 num_decoder_layers=6, dim_feedforward=2048, dropout=0.1,
+                 num_decoder_layers=6, dim_feedforward=2048, dropout=0.3,
                  activation="relu", normalize_before=False,
                  return_intermediate_dec=False):
         """
@@ -246,7 +246,6 @@ class TransformerEncoderLayer(nn.Module):
         返回：
         - 添加位置编码后的张量。
         """
-        # print(f"tensor shape: {tensor.shape}, pos shape: {pos.shape}")
         return tensor if pos is None else tensor + pos
 
     def forward_post(self,
@@ -270,7 +269,6 @@ class TransformerEncoderLayer(nn.Module):
         # 多头自注意力：结合位置编码
         # print(f"src shape: {src.shape},pos shape: {pos.shape}")
         q = k = self.with_pos_embed(src, pos)
-
         # print(f"encoder{q,k}")
         src2 = self.self_attn(q, k, value=src, attn_mask=src_mask,
                               key_padding_mask=src_key_padding_mask)[0]

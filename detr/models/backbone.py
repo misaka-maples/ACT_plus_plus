@@ -2,6 +2,7 @@
 """
 Backbone modules.
 """
+import math
 from collections import OrderedDict
 from torchvision.models import get_model_weights
 # 获取对应模型的默认权重
@@ -18,6 +19,7 @@ from detr.util.misc import NestedTensor, is_main_process
 from .position_encoding import build_position_encoding
 
 import IPython
+import os
 e = IPython.embed
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -67,6 +69,7 @@ class BackboneBase(nn.Module):
         #     if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
         #         parameter.requires_grad_(False)
         if return_interm_layers:
+
             return_layers = {"layer1": "0", "layer2": "1.md", "layer3": "2", "layer4": "3"}
         else:
             return_layers = {'layer4': "0"}
@@ -87,17 +90,40 @@ class BackboneBase(nn.Module):
 
 class Backbone(BackboneBase):
     """ResNet backbone with frozen BatchNorm."""
+
     def __init__(self, name: str,
                  train_backbone: bool,
                  return_interm_layers: bool,
                  dilation: bool):
-        weights = get_model_weights(name).DEFAULT
         backbone = getattr(torchvision.models, name)(
             replace_stride_with_dilation=[False, False, dilation],
-            weights=weights, norm_layer=FrozenBatchNorm2d) # pretrained # TODO do we want frozen batch_norm??
+            pretrained=is_main_process(),
+            norm_layer=FrozenBatchNorm2d)  # pretrained # TODO do we want frozen batch_norm??
         num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
         super().__init__(backbone, train_backbone, num_channels, return_interm_layers)
 
+
+
+class DINOv2BackBone(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        path = '/home/zhnh/Documents/project/act_arm_project/detr/dino_v2'
+        os.makedirs(path, exist_ok=True)
+
+        # 设置本地缓存目录
+        torch.hub.set_dir(path)
+        self.body = torch.hub.load('/home/zhnh/Documents/project/act_arm_project/detr/dino_v2/facebookresearch_dinov2_main', 'dinov2_vits14',source='local')
+        self.body.eval()
+        self.num_channels = 384
+        # 如果你想把模型保存到本地文件
+        # torch.save(self.body.state_dict(), r'/home/zhnh/Documents/project/act_arm_project/detr/dino_v2')
+
+    @torch.no_grad()
+    def forward(self, tensor):
+        xs = self.body.forward_features(tensor)["x_norm_patchtokens"]
+        od = OrderedDict()
+        od["0"] = xs.reshape(xs.shape[0], 22, 16, 384).permute(0, 3, 2, 1)
+        return od
 
 class Joiner(nn.Sequential):
     def __init__(self, backbone, position_embedding):
@@ -119,7 +145,13 @@ def build_backbone(args):
     position_embedding = build_position_encoding(args)
     train_backbone = args.lr_backbone > 0
     return_interm_layers = args.masks
-    backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
+    if args.backbone == 'dino_v2':
+        backbone = DINOv2BackBone()
+    else:
+        assert args.backbone in ['resnet18', 'resnet34']
+        backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels
     return model
+
+ 

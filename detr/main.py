@@ -36,9 +36,9 @@ def get_args_parser():
                         help="Number of encoding layers in the transformer")
     parser.add_argument('--dec_layers', default=6, type=int, # will be overridden
                         help="Number of decoding layers in the transformer")
-    parser.add_argument('--dim_feedforward', default=2048, type=int, # will be overridden
+    parser.add_argument('--dim_feedforward', default=3200, type=int, # will be overridden
                         help="Intermediate size of the feedforward layers in the transformer blocks")
-    parser.add_argument('--hidden_dim', default=256, type=int, # will be overridden
+    parser.add_argument('--hidden_dim', default=512, type=int, # will be overridden
                         help="Size of the embeddings (dimension of the transformer)")
     parser.add_argument('--dropout', default=0.1, type=float,
                         help="Dropout applied in the transformer")
@@ -63,9 +63,9 @@ def get_args_parser():
     parser.add_argument('--kl_weight', action='store', type=int, help='KL Weight', required=False)
     parser.add_argument('--chunk_size', action='store', type=int, help='chunk_size', required=False)
     parser.add_argument('--temporal_agg', action='store_true')
-    parser.add_argument('--vq',default=False, action='store_true')
-
-    parser.add_argument('--use_vq', action='store_true')
+    
+    parser.add_argument('--use_vq', default=False , action='store_true')
+    parser.add_argument('--vq', default=False , action='store_true')
     parser.add_argument('--vq_class', action='store', type=int, help='vq_class', required=False)
     parser.add_argument('--vq_dim', action='store', type=int, help='vq_dim', required=False)
     parser.add_argument('--load_pretrain', action='store_true', default=False)

@@ -1,4 +1,4 @@
-from datetime import datetime
+# from datetime import datetime
 import os, datetime, sys
 import threading
 import time
@@ -21,7 +21,10 @@ import math
 from tqdm import tqdm
 from deploy.visualize_episodes import visualize_joints
 from tcp_tx import PersistentClient
-current_time = datetime.datetime.now()
+import pytz
+tz = pytz.timezone('Asia/Shanghai')
+current_time = datetime.datetime.now(tz)
+# datetime.
 JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
 STATE_NAMES = JOINT_NAMES + ["gripper_state"]+ ["gripper_pos"]+ ["gripper_force"]
 camera_names = ['top', 'right_wrist','left_wrist']
@@ -248,36 +251,47 @@ class eval:
             # 调整大小并显示图像
             result_image = cv2.resize(result_image, (color_width, color_height))
             # self.display_image(result_image)
-            self.image['top'] = frame_data.get(str(serial_number_list[camera_index_map['top']]), None)
-            self.image['right_wrist'] = frame_data.get(str(serial_number_list[camera_index_map['right_wrist']]), None) if num_images > 1 else None
+            for camera_name in camera_names:
+                self.image[camera_name] = frame_data.get(str(serial_number_list[camera_index_map[camera_name]]))
+            # self.image['top'] = frame_data.get(str(serial_number_list[camera_index_map['top']]), None)
+            # self.image['right_wrist'] = frame_data.get(str(serial_number_list[camera_index_map['right_wrist']]), None) if num_images > 1 else None
     def main(self):
         data_dict = Modify_hdf5()
-        dict_ = data_dict.check_hdf5(r'/workspace/ACT_plus_plus/test/episode_1.hdf5')
+        dict_ = data_dict.check_hdf5(r'/workspace/exchange/episode_0.hdf5')
+        print(dict_["action"].shape)
         actions_list = []
         qpos_list_ = []
         loss = []
-        loop_len = len(dict_['right'])
+        loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/ACT_plus_plus/test',
+            'ckpt_dir': r'/workspace/exchange/hdf5_file/2_3-29/act_3-31',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_best.ckpt",
+            'ckpt_name': "policy_step_41500_seed_0.ckpt",
             'backbone': 'resnet18'
         }
+        image_dict = {i:[] for i in camera_names}
+        # print(image_dict)
         ActionGeneration = ActionGenerator(config)
         for i in tqdm(range(loop_len)):
             # print(f"roll:{i}")
             ActionGeneration.t = i
             if self.real_robot:
-                image_dict = {
-                    'top': self.image['top'],
-                    'right_wrist': self.image['right_wrist'],
-                }
+                for camera_name in camera_names:
+                    image_dict[camera_name]=self.image[camera_name]
+                # image_dict = {
+                #     'top': self.image['top'],
+                #     'right_wrist': self.image['right_wrist'],
+                #     'left_wrist':self.image['left_wrist']
+                # }
                 qpos = self.persistentClient.get_arm_postion_joint(1)
             else:
-                image_dict = {
-                    'top': dict_['top'][i],
-                    'right_wrist': dict_['right'][i],
-                } 
+                for camera_name in camera_names:
+                    image_dict[camera_name] = dict_[camera_name][i]
+                # image_dict = {
+                #     'top': dict_['top'][i],
+                #     'right_wrist': dict_['right'][i],
+                #     'left_wrist':dict_['left'][i]
+                # } 
                 qpos = dict_['qpos'][i]
             radius_qpos = [math.radians(j) for j in qpos]
             ActionGeneration.image_dict = image_dict
@@ -291,7 +305,7 @@ class eval:
         path_save_image = os.path.join(os.getcwd(), "deploy_image", f"{today}")
         os.makedirs(path_save_image, exist_ok=True)
         image_path = os.path.join(path_save_image, config['backbone']+"_"+ os.path.splitext(config['ckpt_name'])[0]+ ".png")
-        loss_apth = os.path.join(path_save_image, 'loss' + current_time.strftime("%m-%d-%H-%M") + ".png")
+        loss_apth = os.path.join(path_save_image, 'loss' + current_time.strftime("%m-%d+8-%H-%M") + ".png")
         visualize_joints(dict_['qpos'], actions_list, image_path, STATE_NAMES=STATE_NAMES)
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import smbclient
 import os
 import pickle
 import argparse
@@ -15,50 +16,57 @@ from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
 from visualize_episodes import save_videos
 from detr.models.latent_model import Latent_Model_Transformer
 import wandb
+server = "192.168.2.120"
 class Train:
     def __init__(self):
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/ACT_plus_plus/hdf5_file/act",
-            'dataset_dir':"/workspace/ACT_plus_plus/hdf5_file",
+            'ckpt_dir': "/workspace/exchange/hdf5_file/3_4-1/act",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/hdf5_file/3_4-1",#数据集路径
             'policy_class': 'ACT',
             'task_name': 'train',
-            'batch_size': 1,
+            'batch_size': 4,
             'seed': 0,
-            'num_steps': 2000,
+            'num_steps': 60000,
             'lr': 2e-5,
             'kl_weight': 10,
             'load_pretrain': False,
             'eval_every': 500,
             'validate_every': 500,
             'save_every': 500,
-            'camera_names': ['top', 'right_wrist'],
+            'camera_names': ['top', 'right_wrist','left_wrist'],
             'resume_ckpt_path': 'ckpts/act/policy_best.ckpt',
             'skip_mirrored_data': False,
             'actuator_network_dir': None,
             'history_len': 10,
             'future_len': 10,
             'prediction_len': 10,
-            'temporal_agg': False,
+            'temporal_agg': True,
             'use_vq': False,
             'vq_class': None,
             'vq_dim': None,
             'vq': False,
             'no_encoder': False,
-            'worker_num': 6,
-            'chunk_size': 15,
+            'worker_num': 8,
+            'chunk_size': 90,
+            'num_queries':90,
             'hidden_dim': 512,
             'state_dim': 9,
             'action_dim': 11,
             'dim_feedforward': 3200,
             'num_heads': 8,
             'backbone': 'resnet18',
-            'lr_backbone': 1e-5,
-            'episode_len': 100,
+            # 'lr_backbone': 1e-5,
+            'episode_len': 400,
+            'drop_out':0.3,
             'wandb_project': 'ACT_Training',  # Project name for wandb
+            'enc_layers': 4, 
+            'dec_layers': 7, 
+            'qpos_noise_std': 0,
             # 'num_queries': 15,
         }
+ 
     def main(self):
         wandb.init(project=self.args['wandb_project'],name="train", config=self.args,settings=wandb.Settings(_disable_stats=True))
         # 从 self.args 中提取相关参数

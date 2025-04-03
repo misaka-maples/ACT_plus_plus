@@ -8,6 +8,8 @@ import numpy as np
 import cv2
 from queue import Queue
 from pyorbbecsdk import *
+from utils import frame_to_bgr_image
+
 MAX_DEVICES = 5  # 假设最多支持 5 台设备
 MAX_QUEUE_SIZE = 10  # 最大帧队列长度
 multi_device_sync_config = {}
@@ -152,23 +154,24 @@ class CAMERA_HOT_PLUG:
                 self.depth_frames_queue[serial_number].put(depth_frame)
 
     def rendering_frame(self, max_wait=5):
-        """渲染相机帧"""
         image_dict: dict[str, np.ndarray] = {}
         start_time = time.time()
-
+        color_width, color_height = None, None
         while len(image_dict) != self.curr_device_cnt:
             if time.time() - start_time > max_wait:
                 print("⚠️ WARN: 渲染超时，部分相机未收到帧数据")
                 break
-
             for serial_number in self.color_frames_queue.keys():
+                color_frame = None
                 if not self.color_frames_queue[serial_number].empty():
                     color_frame = self.color_frames_queue[serial_number].get()
-                    if color_frame:
-                        color_image = self.frame_to_bgr_image(color_frame)
-                        image_dict[serial_number] = color_image
+                if color_frame is None:
+                    continue
+                color_width, color_height = color_frame.get_width(), color_frame.get_height()
+                color_image = frame_to_bgr_image(color_frame)
+                image_dict[serial_number] = color_image
 
-        return image_dict
+        return image_dict,color_width, color_height
 
     def sync_mode_from_str(self, sync_mode_str: str) -> OBMultiDeviceSyncMode:
         """将字符串转换为同步模式"""
@@ -193,14 +196,14 @@ class CAMERA_HOT_PLUG:
             multi_device_sync_config[device["serial_number"]] = device
             print(f"📷 Device {device['serial_number']}: {device['config']['mode']}")
 class eval:
-    def __init__(self,real_robot=False):
+    def __init__(self,real_robot=False,data_true=False):
         self.real_robot = real_robot
+        self.data_true = data_true
         if self.real_robot:
             self.camera = CAMERA_HOT_PLUG()
-            self.persistentClient = PersistentClient()
-            self.persistentClient.set_stop(1)
-            self.persistentClient.set_open(1)
-            self.image = {'top': None, 'right_wrist': None}
+            self.persistentClient = PersistentClient('192.168.2.14', 8001)
+
+            self.image = {'top': [], 'right_wrist': [], 'left_wrist':[]}
             self.main()
         else:
             self.main()
@@ -255,18 +258,37 @@ class eval:
                 self.image[camera_name] = frame_data.get(str(serial_number_list[camera_index_map[camera_name]]))
             # self.image['top'] = frame_data.get(str(serial_number_list[camera_index_map['top']]), None)
             # self.image['right_wrist'] = frame_data.get(str(serial_number_list[camera_index_map['right_wrist']]), None) if num_images > 1 else None
+    def is_close(self, actual, target, tolerance=0.1):
+        """
+        判断两个列表的每个元素是否在允许误差范围内
+        :param actual: 实际值列表（如当前机械臂状态）
+        :param target: 目标值列表
+        :param tolerance: 允许的最大误差（绝对值）
+        :return: 所有元素均满足误差要求返回True，否则False
+        """
+        # 处理None和长度检查
+        if actual is None or target is None:
+            return False
+        if len(actual) != len(target):
+            return False
+        
+        # 逐个元素比较误差
+        for a, t in zip(actual, target):
+            if abs(a - t) > tolerance:
+                return False
+        return True
     def main(self):
         data_dict = Modify_hdf5()
-        dict_ = data_dict.check_hdf5(r'/workspace/exchange/hdf5_file/4_4-1/episode_10.hdf5')
-        print(dict_["action"].shape)
+        dict_ = data_dict.check_hdf5(r'/workspace/exchange/hdf5_file/episode_10.hdf5')
+        # print(dict_["action"].shape)
         actions_list = []
         qpos_list_ = []
         loss = []
         loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/hdf5_file/4_4-1/act',
+            'ckpt_dir': r'/workspace/exchange/4-2',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_step_11500_seed_8.ckpt",
+            'ckpt_name': "policy_best.ckpt",
             'backbone': 'resnet18'
         }
         image_dict = {i:[] for i in camera_names}
@@ -276,29 +298,36 @@ class eval:
             # print(f"roll:{i}")
             ActionGeneration.t = i
             if self.real_robot:
-                for camera_name in camera_names:
-                    image_dict[camera_name]=self.image[camera_name]
-                # image_dict = {
-                #     'top': self.image['top'],
-                #     'right_wrist': self.image['right_wrist'],
-                #     'left_wrist':self.image['left_wrist']
-                # }
-                qpos = self.persistentClient.get_arm_postion_joint(1)
+                if not self.data_true:
+                    for camera_name in camera_names:
+                        image_dict[camera_name] = np.array(dict_[camera_name][i])
+                    qpos = dict_['qpos'][i]
+                else:
+                    self.updata_frame()
+                    for camera_name in camera_names:
+                        image_dict[camera_name]=self.image[camera_name]
+                    qpos = self.persistentClient.get_arm_position_joint(1)
             else:
+
                 for camera_name in camera_names:
-                    image_dict[camera_name] = dict_[camera_name][i]
-                # image_dict = {
-                #     'top': dict_['top'][i],
-                #     'right_wrist': dict_['right'][i],
-                #     'left_wrist':dict_['left'][i]
-                # } 
+                    image_dict[camera_name] = np.array(dict_[camera_name][i])
                 qpos = dict_['qpos'][i]
             radius_qpos = [math.radians(j) for j in qpos]
+            
+            # print(image_dict)
             ActionGeneration.image_dict = image_dict
             ActionGeneration.qpos_list = radius_qpos
             actions = ActionGeneration.get_action()
+            # print(qpos)
+            print(list(np.degrees(actions[:6])))
             if self.real_robot:
-                self.persistentClient.set_arm_position(actions, "joint", 1)
+                if self.data_true:
+                    self.persistentClient.set_arm_position(list(np.degrees(actions[:6])), "joint", 1)
+                else:
+                    if self.is_close(self.persistentClient.get_arm_position_joint(1),list(np.degrees(qpos[:6]))):
+                        continue
+                    else:
+                        self.persistentClient.set_arm_position(list(np.degrees(qpos[:6])), "joint", 1)
             actions_list.append(actions)
             loss.append((actions - dict_['action'][i]) ** 2)
         today = current_time.strftime("%m-%d-%H-%M")
@@ -309,4 +338,4 @@ class eval:
         visualize_joints(dict_['qpos'], actions_list, image_path, STATE_NAMES=STATE_NAMES)
 
 if __name__ == '__main__':
-    eval()
+    eval(real_robot=True,data_true=True)

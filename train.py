@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import smbclient
 import os
 import pickle
 import argparse
@@ -20,35 +19,30 @@ from detr.models.latent_model import Latent_Model_Transformer
 import wandb
 # 限制 PyTorch 只能看到 GPU 1
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 # 重新获取 GPU 设备索引
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # print(f"当前使用的 GPU: {device}")
 print(f"当前 GPU 名称: {torch.cuda.get_device_name(0)}")
-
-# print(f"PyTorch 看到的 GPU 数量: {torch.cuda.device_count()}")
-# for i in range(torch.cuda.device_count()):
-#     print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
-
 server = "192.168.2.120"
 class Train:
     def __init__(self):
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/hdf5_file/4_4-1/act",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/hdf5_file/4_4-1",#数据集路径
+            'ckpt_dir': "/workspace/exchange/4_3_hdf5_file/act",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/4_3_hdf5_file",#数据集路径
             'policy_class': 'ACT',
             'task_name': 'train',
-            'batch_size': 2,
-            'seed': 8,
-            'num_steps': 80000,
+            'batch_size': 4,
+            'seed': 0,
+            'num_steps': 20000,
             'lr': 1e-5,
             'kl_weight': 10,
             'load_pretrain': False,
-            'eval_every': 500,
-            'validate_every': 500,
-            'save_every': 500,
+            'eval_every': 1000,
+            'validate_every': 1000,
+            'save_every': 1000,
             'camera_names': ['top', 'right_wrist','left_wrist'],
             'resume_ckpt_path': 'ckpts/act/policy_best.ckpt',
             'skip_mirrored_data': False,
@@ -56,13 +50,13 @@ class Train:
             'history_len': 10,
             'future_len': 10,
             'prediction_len': 10,
-            'temporal_agg': True,
+            'temporal_agg': False,
             'use_vq': False,
             'vq_class': None,
             'vq_dim': None,
             'vq': False,
-            'no_encoder': True,
-            'worker_num': 1,
+            'no_encoder': False,
+            'worker_num': 4,
             'chunk_size': 120,
             'num_queries':120,
             'hidden_dim': 512,
@@ -78,6 +72,7 @@ class Train:
             'enc_layers': 4, 
             'dec_layers': 7, 
             'qpos_noise_std': 0,
+            'train_ratio':0.95,
             # 'num_queries': 15,
         }
  
@@ -92,7 +87,7 @@ class Train:
         policy_class = self.args['policy_class']
         stats_dir = None
         sample_weights = None  # 如果需要，可以传递样本权重
-        train_ratio = 0.99  # 默认训练集比例
+        train_ratio = self.args['train_ratio']  # 默认训练集比例
         worker_num = self.args['worker_num']
         camera_names = self.args['camera_names']  # 摄像头名称列表
         # 调用 load_data 函数加载数据
@@ -189,7 +184,7 @@ class Train:
                 print(summary_string)
 
             # evaluation
-            if (step > 0) and (step % eval_every == 0):
+            if (step > 0) and (step % save_every == 0):
                 # first save then eval
                 ckpt_name = f'policy_step_{step}_seed_{seed}.ckpt'
                 ckpt_path = os.path.join(ckpt_dir, ckpt_name)
@@ -209,9 +204,9 @@ class Train:
             loss.backward()
             optimizer.step()
 
-            if step % save_every == 0:
-                ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')
-                torch.save(policy.serialize(), ckpt_path)
+            # if step % save_every == 0:
+            #     ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')
+            #     torch.save(policy.serialize(), ckpt_path)
 
         # 最后保存模型
         ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')

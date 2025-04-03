@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import smbclient
 import os
 import pickle
 import argparse
@@ -20,16 +19,11 @@ from detr.models.latent_model import Latent_Model_Transformer
 import wandb
 # 限制 PyTorch 只能看到 GPU 1
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 # 重新获取 GPU 设备索引
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # print(f"当前使用的 GPU: {device}")
 print(f"当前 GPU 名称: {torch.cuda.get_device_name(0)}")
-
-# print(f"PyTorch 看到的 GPU 数量: {torch.cuda.device_count()}")
-# for i in range(torch.cuda.device_count()):
-#     print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
-
 server = "192.168.2.120"
 class Train:
     def __init__(self):
@@ -190,7 +184,7 @@ class Train:
                 print(summary_string)
 
             # evaluation
-            if (step > 0) and (step % eval_every == 0):
+            if (step > 0) and (step % save_every == 0):
                 # first save then eval
                 ckpt_name = f'policy_step_{step}_seed_{seed}.ckpt'
                 ckpt_path = os.path.join(ckpt_dir, ckpt_name)
@@ -210,9 +204,9 @@ class Train:
             loss.backward()
             optimizer.step()
 
-            if step % save_every == 0:
-                ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')
-                torch.save(policy.serialize(), ckpt_path)
+            # if step % save_every == 0:
+            #     ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')
+            #     torch.save(policy.serialize(), ckpt_path)
 
         # 最后保存模型
         ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')

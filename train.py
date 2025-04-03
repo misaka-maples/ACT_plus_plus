@@ -36,19 +36,19 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/hdf5_file/4_4-1/act",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/hdf5_file/4_4-1",#数据集路径
+            'ckpt_dir': "/workspace/exchange/hdf5_file/4-3/act",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/hdf5_file",#数据集路径
             'policy_class': 'ACT',
             'task_name': 'train',
-            'batch_size': 2,
+            'batch_size': 4,
             'seed': 8,
-            'num_steps': 80000,
+            'num_steps': 20000,
             'lr': 1e-5,
             'kl_weight': 10,
             'load_pretrain': False,
-            'eval_every': 500,
-            'validate_every': 500,
-            'save_every': 500,
+            'eval_every': 1000,
+            'validate_every': 1000,
+            'save_every': 1000,
             'camera_names': ['top', 'right_wrist','left_wrist'],
             'resume_ckpt_path': 'ckpts/act/policy_best.ckpt',
             'skip_mirrored_data': False,
@@ -56,21 +56,21 @@ class Train:
             'history_len': 10,
             'future_len': 10,
             'prediction_len': 10,
-            'temporal_agg': True,
+            'temporal_agg': False,
             'use_vq': False,
             'vq_class': None,
             'vq_dim': None,
             'vq': False,
-            'no_encoder': True,
-            'worker_num': 1,
-            'chunk_size': 120,
-            'num_queries':120,
+            'no_encoder': False,
+            'worker_num': 8,
+            'chunk_size': 15,
+            'num_queries':15,
             'hidden_dim': 512,
             'state_dim': 9,
             'action_dim': 11,
             'dim_feedforward': 3200,
             'num_heads': 8,
-            'backbone': 'resnet50',
+            'backbone': 'resnet18',
             # 'lr_backbone': 1e-5,
             'episode_len': 400,
             'drop_out':0.3,
@@ -78,6 +78,7 @@ class Train:
             'enc_layers': 4, 
             'dec_layers': 7, 
             'qpos_noise_std': 0,
+            'train_ratio':0.87
             # 'num_queries': 15,
         }
  
@@ -92,7 +93,7 @@ class Train:
         policy_class = self.args['policy_class']
         stats_dir = None
         sample_weights = None  # 如果需要，可以传递样本权重
-        train_ratio = 0.99  # 默认训练集比例
+        train_ratio = self.args['train_ratio'] # 默认训练集比例
         worker_num = self.args['worker_num']
         camera_names = self.args['camera_names']  # 摄像头名称列表
         # 调用 load_data 函数加载数据

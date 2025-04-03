@@ -257,17 +257,17 @@ class eval:
             # self.image['right_wrist'] = frame_data.get(str(serial_number_list[camera_index_map['right_wrist']]), None) if num_images > 1 else None
     def main(self):
         data_dict = Modify_hdf5()
-        dict_ = data_dict.check_hdf5(r'/workspace/exchange/hdf5_file/4_4-1/episode_10.hdf5')
+        dict_ = data_dict.check_hdf5(r'/workspace/exchange/hdf5_file/4_4-1/episode_19.hdf5')
         print(dict_["action"].shape)
         actions_list = []
         qpos_list_ = []
         loss = []
         loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/hdf5_file/4_4-1/act',
+            'ckpt_dir': r'/workspace/exchange/hdf5_file/5_4-2/act',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_step_11500_seed_8.ckpt",
-            'backbone': 'resnet18'
+            'ckpt_name': "policy_step_25000_seed_8.ckpt",
+            'backbone': 'resnet18'#未调用
         }
         image_dict = {i:[] for i in camera_names}
         # print(image_dict)

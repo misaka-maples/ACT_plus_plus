@@ -72,6 +72,7 @@ class DETRVAE_Decoder(nn.Module):
         if len(self.backbones)>1:
             # Image observation features and position embeddings
             all_cam_features = []
+            all_cam_features_future = []
             all_cam_pos = []
             for cam_id, _ in enumerate(self.camera_names):
                 features, pos = self.backbones[cam_id](image[:, cam_id])
@@ -204,7 +205,7 @@ class DETRVAE(nn.Module):
                 pos_embed = self.pos_table.clone().detach()
                 pos_embed = pos_embed.permute(1, 0, 2)  # (seq+1, 1, hidden_dim)
                 # query model
-                encoder_output = self.encoder(encoder_input, pos=pos_embed, src_key_padding_mask=is_pad)
+                encoder_output = self.encoder(encoder_input, pos=pos_embed)
                 encoder_output = encoder_output[0] # take cls output only
                 latent_info = self.latent_proj(encoder_output)
                 
@@ -389,7 +390,7 @@ def build(args):
     if args.no_encoder:
         encoder = None
     else:
-        encoder = build_transformer(args)
+        encoder = build_encoder(args)
 
     if args.model_type=="ACT":
         transformer = build_transformer(args)

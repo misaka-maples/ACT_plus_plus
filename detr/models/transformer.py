@@ -49,6 +49,7 @@ class Transformer_decoder(nn.Module):
     def forward(self, src, query_embed, proprio_input=None, additional_pos_embed=None, pos_embed=None):
         # TODO flatten only when input has H and W
         if len(src.shape) == 4: # has H and W
+            # print(src.shape)
             # flatten NxCxHxW to HWxNxC
             bs, c, h, w = src.shape
             src = src.flatten(2).permute(2, 0, 1)
@@ -104,6 +105,7 @@ class Transformer(nn.Module):
         if len(src.shape) == 4: # has H and W
             # flatten NxCxHxW to HWxNxC
             bs, c, h, w = src.shape
+            # print(src.shape)
             src = src.flatten(2).permute(2, 0, 1)
             pos_embed = pos_embed.flatten(2).permute(2, 0, 1).repeat(1, bs, 1)
             query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)

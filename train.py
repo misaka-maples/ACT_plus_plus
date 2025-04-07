@@ -11,30 +11,32 @@ from einops import rearrange
 import time
 from utils import load_data  # data functions
 from utils import compute_dict_mean, set_seed, detach_dict, calibrate_linear_vel, postprocess_base_action  # helper functions
-if False:
-    from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy,HITPolicy
-from policy_origin import ACTPolicy,CNNMLPPolicy,DiffusionPolicy
+# if False:
+from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy,HITPolicy
+# from policy_origin import ACTPolicy,CNNMLPPolicy,DiffusionPolicy
 from visualize_episodes import save_videos
-from detr.models.latent_model import Latent_Model_Transformer
 import wandb
 # 限制 PyTorch 只能看到 GPU 1
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-# 重新获取 GPU 设备索引
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# print(f"当前使用的 GPU: {device}")
-print(f"当前 GPU 名称: {torch.cuda.get_device_name(0)}")
+if torch.cuda.is_available():
+    num_gpus = torch.cuda.device_count()
+    for i in range(num_gpus):
+        print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
+else:
+    print("没有可用的 GPU。")
 server = "192.168.2.120"
 class Train:
     def __init__(self):
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/hdf5_file/4-3/act",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/hdf5_file",#数据集路径
+            'ckpt_dir': "/workspace/exchange/4-7/HDF5_FILE/act",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/4-7/HDF5_FILE",#数据集路径
+            'model_type':'ACT',
             'policy_class': 'ACT',
             'task_name': 'train',
-            'batch_size': 4,
+            'batch_size': 1,
             'seed': 8,
             'num_steps': 20000,
             'lr': 1e-5,
@@ -70,16 +72,18 @@ class Train:
             'feature_loss':False,
             'episode_len': 400,
             'drop_out':0.3,
+            'wandb':False,
             'wandb_project': 'ACT_Training',  # Project name for wandb
             'enc_layers': 4, 
             'dec_layers': 7, 
             'qpos_noise_std': 0,
-            'train_ratio':0.87
-            # 'num_queries': 15,
+            'train_ratio':0.87,
+            'context_len': 2776-15
         }
  
     def main(self):
-        wandb.init(project=self.args['wandb_project'],name="train", config=self.args,settings=wandb.Settings(_disable_stats=True))
+        if self.args['wandb']:
+            wandb.init(project=self.args['wandb_project'],name="train", config=self.args,settings=wandb.Settings(_disable_stats=True))
         # 从 self.args 中提取相关参数
         dataset_dir = self.args['dataset_dir']  # 假设使用 ckpt_dir 作为数据集目录
         batch_size_train = self.args['batch_size']
@@ -169,14 +173,18 @@ class Train:
                     validation_summary = compute_dict_mean(validation_dicts)
                     epoch_val_loss = validation_summary['loss']
                     # Log validation loss to wandb
-                    wandb.log({"验证_loss": epoch_val_loss, "step": step})
+                    if self.args['wandb']:
+
+                        wandb.log({"验证_loss": epoch_val_loss, "step": step})
 
                     if epoch_val_loss < min_val_loss:
                         min_val_loss = epoch_val_loss
                         best_ckpt_info = (step, min_val_loss, deepcopy(policy.serialize()))
                 # Log additional metrics if necessary
-                for k, v in validation_summary.items():
-                    wandb.log({f"val_{k}": v.item(), "step": step})
+                if self.args['wandb']:
+
+                    for k, v in validation_summary.items():
+                        wandb.log({f"val_{k}": v.item(), "step": step})
 
                 for k in list(validation_summary.keys()):
                     validation_summary[f'val_{k}'] = validation_summary.pop(k)
@@ -199,7 +207,9 @@ class Train:
             forward_dict = self.forward_pass(data, policy)
              # Log training loss to wandb
             loss = forward_dict['loss']
-            wandb.log({"training_loss": loss.item(), "step": step})
+            if self.args['wandb']:
+
+                wandb.log({"training_loss": loss.item(), "step": step})
 
             # backward
             loss = forward_dict['loss']
@@ -216,7 +226,9 @@ class Train:
         best_step, min_val_loss, best_state_dict = best_ckpt_info
         ckpt_path = os.path.join(ckpt_dir, f'policy_step_{best_step}_seed_{seed}.ckpt')
         torch.save(best_state_dict, ckpt_path)
-        wandb.finish()  # Close the wandb run
+        if self.args['wandb']:
+
+            wandb.finish()  # Close the wandb run
         print(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at step {best_step}')
         return best_ckpt_info
     def eval(self,ckpt_name):
@@ -270,8 +282,8 @@ class Train:
             policy = ACTPolicy(self.args)
         elif self.args['policy_class'] == 'CNNMLP':
             policy = CNNMLPPolicy(self.args)
-        # elif self.args['policy_class'] == 'HIT':
-        #     policy = HITPolicy(self.args)
+        elif self.args['policy_class'] == 'HIT':
+            policy = HITPolicy(self.args)
         elif self.args['policy_class'] == 'Diffusion':
             policy = DiffusionPolicy(self.args)
         else:

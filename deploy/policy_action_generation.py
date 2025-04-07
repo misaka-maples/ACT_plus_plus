@@ -18,6 +18,7 @@ from pathlib import Path
 root_path = Path(__file__).resolve().parent.parent
 sys.path.append(str(root_path))
 from policy_origin import ACTPolicy
+from policy import HITPolicy
 import torch
 import pickle
 import argparse
@@ -87,7 +88,10 @@ class ActionGenerator:
         """
         # ckpt_path = os.path.join(self.ckpt_dir, 'policy_step_1500_seed_0.ckpt')
         ckpt_path = os.path.join(self.ckpt_dir, self.ckpt_name)
-        policy = ACTPolicy(self.config_data)
+        if self.config_data['policy_class']=='ACT':
+            policy = ACTPolicy(self.config_data)
+        elif self.config_data['policy_class']=='HIT':
+            policy = HITPolicy(self.config_data)
         policy.deserialize(torch.load(ckpt_path, weights_only=True))
         policy.cuda()
         policy.eval()

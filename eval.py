@@ -279,16 +279,16 @@ class eval:
         return True
     def main(self):
         data_dict = Modify_hdf5()
-        dict_ = data_dict.check_hdf5(r'/workspace/exchange/hdf5_file/episode_10.hdf5')
+        dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-7/HDF5_FILE/episode_0.hdf5')
         # print(dict_["action"].shape)
         actions_list = []
         qpos_list_ = []
         loss = []
         loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/4-2',
+            'ckpt_dir': r'/workspace/exchange/4-7/HDF5_FILE/act',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_best.ckpt",
+            'ckpt_name': "policy_step_1000_seed_8.ckpt",
             'backbone': 'resnet18'
         }
         image_dict = {i:[] for i in camera_names}
@@ -338,4 +338,4 @@ class eval:
         visualize_joints(dict_['qpos'], actions_list, image_path, STATE_NAMES=STATE_NAMES)
 
 if __name__ == '__main__':
-    eval(real_robot=True,data_true=True)
+    eval(real_robot=False,data_true=False)

@@ -42,8 +42,6 @@ class Transformer_Block(nn.Module):
             x2 = self.ln_3(x2)
             x = torch.cat((x_condition, x2), dim=0)
             return x
-            
-    
 class Transformer_BERT(nn.Module):
     def __init__(self, context_len, latent_dim=128, num_head=4, num_layer=4, dropout_rate=0.0,  
                  use_pos_embd_image=False, use_pos_embd_action=False, query_num=50,
@@ -53,35 +51,91 @@ class Transformer_BERT(nn.Module):
         self.num_head = num_head
         self.num_layer = num_layer
         self.context_len = context_len
-        self.use_pos_embd_image = use_pos_embd_image==1
-        self.use_pos_embd_action = use_pos_embd_action==1
+        self.use_pos_embd_image = use_pos_embd_image == 1
+        self.use_pos_embd_action = use_pos_embd_action == 1
         self.query_num = query_num
-        if use_pos_embd_action and use_pos_embd_image:
-            self.weight_pos_embed = None
-        elif use_pos_embd_image and not use_pos_embd_action:
-            self.weight_pos_embed = nn.Embedding(self.query_num, latent_dim)
-        elif not use_pos_embd_image and not use_pos_embd_action:
-            self.weight_pos_embed = nn.Embedding(self.context_len, latent_dim)
-        elif not use_pos_embd_image and use_pos_embd_action:
-            raise ValueError("use_pos_embd_action is not supported")
+        self.total_len = context_len + query_num
+
+        # Positional embedding setup
+        if self.use_pos_embd_action and self.use_pos_embd_image:
+            self.weight_pos_embed = None  # 使用外部传入的 sinusoidal embedding
+        elif self.use_pos_embd_image and not self.use_pos_embd_action:
+            self.weight_pos_embed = nn.Embedding(query_num, latent_dim)
+        elif not self.use_pos_embd_image and not self.use_pos_embd_action:
+            self.weight_pos_embed = nn.Embedding(context_len, latent_dim)
+        elif not self.use_pos_embd_image and self.use_pos_embd_action:
+            raise ValueError("use_pos_embd_action is not supported without use_pos_embd_image")
         else:
-            raise ValueError("bug ? is not supported")
-        
+            raise ValueError("Unexpected positional embedding combination.")
+
+        # Transformer blocks
         self.attention_blocks = nn.Sequential(
-            *[Transformer_Block(latent_dim, num_head, dropout_rate, self_attention, query_num) for _ in range(num_layer)],
+            *[Transformer_Block(latent_dim, num_head, dropout_rate, self_attention, query_num) for _ in range(num_layer)]
         )
         self.self_attention = self_attention
-    
+
     def forward(self, x, pos_embd_image=None, query_embed=None):
-        if not self.use_pos_embd_image and not self.use_pos_embd_action: #everything learned - severe overfitting
-            x = x + self.weight_pos_embed.weight[:, None]
-        elif self.use_pos_embd_image and not self.use_pos_embd_action: #use learned positional embedding for action 
+        # 维度安全检查
+        expected_len = self.context_len + self.query_num
+        # print(x.shape)
+        assert x.shape[0] == expected_len, \
+            f"Expected x.shape[0]={expected_len}, but got {x.shape[0]}"
+
+        if not self.use_pos_embd_image and not self.use_pos_embd_action:
+            # 全部用 learnable embedding（context 部分）
+            x[:-self.query_num] = x[:-self.query_num] + self.weight_pos_embed.weight[:, None]
+        elif self.use_pos_embd_image and not self.use_pos_embd_action:
+            # query 用 learnable，context 用 sin embedding
             x[-self.query_num:] = x[-self.query_num:] + self.weight_pos_embed.weight[:, None]
             x[:-self.query_num] = x[:-self.query_num] + pos_embd_image
-        elif self.use_pos_embd_action and self.use_pos_embd_image: #all use sinsoidal positional embedding
+        elif self.use_pos_embd_image and self.use_pos_embd_action:
+            # 都用 sinusoidal embedding（外部传入）
             x[-self.query_num:] = x[-self.query_num:] + query_embed
-            x[:-self.query_num] = x[:-self.query_num] + pos_embd_image 
-                        
+            x[:-self.query_num] = x[:-self.query_num] + pos_embd_image
+
         x = self.attention_blocks(x)
-        # take the last token
         return x
+     
+    
+# class Transformer_BERT(nn.Module):
+#     def __init__(self, context_len, latent_dim=128, num_head=4, num_layer=4, dropout_rate=0.0,  
+#                  use_pos_embd_image=False, use_pos_embd_action=False, query_num=50,
+#                  self_attention=True) -> None:
+#         super().__init__()
+#         self.latent_dim = latent_dim
+#         self.num_head = num_head
+#         self.num_layer = num_layer
+#         self.context_len = context_len
+#         self.use_pos_embd_image = use_pos_embd_image==1
+#         self.use_pos_embd_action = use_pos_embd_action==1
+#         self.query_num = query_num
+#         if use_pos_embd_action and use_pos_embd_image:
+#             self.weight_pos_embed = None
+#         elif use_pos_embd_image and not use_pos_embd_action:
+#             self.weight_pos_embed = nn.Embedding(self.query_num, latent_dim)
+#         elif not use_pos_embd_image and not use_pos_embd_action:
+#             self.weight_pos_embed = nn.Embedding(self.context_len, latent_dim)
+#         elif not use_pos_embd_image and use_pos_embd_action:
+#             raise ValueError("use_pos_embd_action is not supported")
+#         else:
+#             raise ValueError("bug ? is not supported")
+        
+#         self.attention_blocks = nn.Sequential(
+#             *[Transformer_Block(latent_dim, num_head, dropout_rate, self_attention, query_num) for _ in range(num_layer)],
+#         )
+#         self.self_attention = self_attention
+    
+#     def forward(self, x, pos_embd_image=None, query_embed=None):
+#         if not self.use_pos_embd_image and not self.use_pos_embd_action: #everything learned - severe overfitting
+#             x = x + self.weight_pos_embed.weight[:, None]
+#         elif self.use_pos_embd_image and not self.use_pos_embd_action: #use learned positional embedding for action 
+#             x[-self.query_num:] = x[-self.query_num:] + self.weight_pos_embed.weight[:, None]
+#             x[:-self.query_num] = x[:-self.query_num] + pos_embd_image
+#         elif self.use_pos_embd_action and self.use_pos_embd_image: #all use sinsoidal positional embedding
+#             x[-self.query_num:] = x[-self.query_num:] + query_embed
+#             x[:-self.query_num] = x[:-self.query_num] + pos_embd_image 
+                        
+#         x = self.attention_blocks(x)
+#         # take the last token
+#         return x
+    

@@ -30,12 +30,12 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/4_3_hdf5_file/act",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/4_3_hdf5_file",#数据集路径
+            'ckpt_dir': "/workspace/exchange/hdf5_file/4-3/act",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/hdf5_file",#数据集路径
             'policy_class': 'ACT',
             'task_name': 'train',
             'batch_size': 4,
-            'seed': 0,
+            'seed': 8,
             'num_steps': 20000,
             'lr': 1e-5,
             'kl_weight': 10,
@@ -56,15 +56,15 @@ class Train:
             'vq_dim': None,
             'vq': False,
             'no_encoder': False,
-            'worker_num': 4,
-            'chunk_size': 120,
-            'num_queries':120,
+            'worker_num': 8,
+            'chunk_size': 15,
+            'num_queries':15,
             'hidden_dim': 512,
             'state_dim': 9,
             'action_dim': 11,
             'dim_feedforward': 3200,
             'num_heads': 8,
-            'backbone': 'resnet50',
+            'backbone': 'resnet18',
             'same_backbones':False,
             # 'lr_backbone': 1e-5,
             'feature_loss':False,
@@ -74,7 +74,7 @@ class Train:
             'enc_layers': 4, 
             'dec_layers': 7, 
             'qpos_noise_std': 0,
-            'train_ratio':0.95,
+            'train_ratio':0.87
             # 'num_queries': 15,
         }
  
@@ -89,7 +89,7 @@ class Train:
         policy_class = self.args['policy_class']
         stats_dir = None
         sample_weights = None  # 如果需要，可以传递样本权重
-        train_ratio = self.args['train_ratio']  # 默认训练集比例
+        train_ratio = self.args['train_ratio'] # 默认训练集比例
         worker_num = self.args['worker_num']
         camera_names = self.args['camera_names']  # 摄像头名称列表
         # 调用 load_data 函数加载数据

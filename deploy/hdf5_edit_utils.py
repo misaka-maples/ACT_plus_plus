@@ -557,11 +557,11 @@ if __name__ == '__main__':
     #     'qpos': (45, 100),
     # }
     test = Modify_hdf5()
-    test.modify_hdf5('/workspace/exchange/episode_1.hdf5', compress=False,edit=True)
+    test.modify_hdf5('/workspace/exchange/episode_0.hdf5', compress=False,edit=True)
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # for i in range(32,53):
-    test.save_video(r'/workspace/exchange', fps=30, i=1,arm='top')
+    test.save_video(r'/workspace/exchange', fps=20, i=0,arm='top')
     #
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀

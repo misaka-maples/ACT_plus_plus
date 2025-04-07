@@ -65,7 +65,9 @@ class Train:
             'dim_feedforward': 3200,
             'num_heads': 8,
             'backbone': 'resnet50',
+            'same_backbones':False,
             # 'lr_backbone': 1e-5,
+            'feature_loss':False,
             'episode_len': 400,
             'drop_out':0.3,
             'wandb_project': 'ACT_Training',  # Project name for wandb

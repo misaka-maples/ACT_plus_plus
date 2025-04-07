@@ -44,7 +44,7 @@ class ActionGenerator:
         config_path = os.path.join(self.ckpt_dir, 'config.pkl')
         with open(config_path, 'rb') as f:
             self.config_data = pickle.load(f)
-        self.config_data['temporal_agg'] = False
+        self.config_data['temporal_agg'] = True
         # print(self.config_data)
         # 设置配置
         # self.policy_config = {

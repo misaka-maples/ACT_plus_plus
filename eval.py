@@ -279,16 +279,16 @@ class eval:
         return True
     def main(self):
         data_dict = Modify_hdf5()
-        dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-7/HDF5_FILE/episode_0.hdf5')
+        dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-7/episode_7.hdf5')
         # print(dict_["action"].shape)
         actions_list = []
         qpos_list_ = []
         loss = []
         loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/4-7/HDF5_FILE/act',
+            'ckpt_dir': r'/workspace/exchange/4-7/2',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_step_1000_seed_8.ckpt",
+            'ckpt_name': "policy_best.ckpt",
             'backbone': 'resnet18'
         }
         image_dict = {i:[] for i in camera_names}

@@ -2349,9 +2349,9 @@
             </Depth>
             <Color>
                 <!--The resolution width is enabled by default, int type-->
-                <Width>1280</Width>
+                <Width>640</Width>
                 <!--High resolution is enabled by default, int type-->
-                <Height>720</Height>
+                <Height>480</Height>
                 <!--The frame rate of the resolution enabled by default, int type-->
                 <FPS>30</FPS>
                 <Format>MJPG</Format>
@@ -2415,9 +2415,9 @@
             </Depth>
             <Color>
                 <!--The resolution width is enabled by default, int type-->
-                <Width>1280</Width>
+                <Width>640</Width>
                 <!--High resolution is enabled by default, int type-->
-                <Height>720</Height>
+                <Height>480</Height>
                 <!--The frame rate of the resolution enabled by default, int type-->
                 <FPS>30</FPS>
                 <Format>MJPG</Format>

@@ -278,17 +278,22 @@ class eval:
                 return False
         return True
     def main(self):
-        data_dict = Modify_hdf5()
-        dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-7/episode_7.hdf5')
-        # print(dict_["action"].shape)
         actions_list = []
         qpos_list_ = []
         loss = []
-        loop_len = len(dict_['top'])
+        if self.real_robot:
+            loop_len = 200
+            task_complete_step = None
+            square_size = 100
+        else:
+            data_dict = Modify_hdf5()
+            dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-7/episode_7.hdf5')
+            # print(dict_["action"].shape)
+            loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/4-7/2',
+            'ckpt_dir': r'/workspace/exchange/4-11/hit',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_best.ckpt",
+            'ckpt_name': "policy_step_22000_seed_8.ckpt",
             'backbone': 'resnet18'
         }
         image_dict = {i:[] for i in camera_names}
@@ -298,21 +303,40 @@ class eval:
             # print(f"roll:{i}")
             ActionGeneration.t = i
             if self.real_robot:
-                if not self.data_true:
-                    for camera_name in camera_names:
-                        image_dict[camera_name] = np.array(dict_[camera_name][i])
-                    qpos = dict_['qpos'][i]
-                else:
+                if self.data_true:
                     self.updata_frame()
+                    if self.is_close(self.persistentClient.get_arm_position_joint(1)[:3],[-121.42, -599.741, -209.687]) or i >30:
+                        task_complete_step = 1
                     for camera_name in camera_names:
-                        image_dict[camera_name]=self.image[camera_name]
-                    qpos = self.persistentClient.get_arm_position_joint(1)
+                        image_dict[camera_name] = self.image[camera_name]
+                        qpos = self.persistentClient.get_arm_position_joint(1)
+                        radius_qpos = [math.radians(j) for j in qpos]
+                        img_copy = [row[:] for row in image_dict[camera_name]]  # 深拷贝，防止改到原图
+                        height = len(img_copy)
+                        width = len(img_copy[0])
+                        # print(height,width)
+                        square_color = [0, 0, 255] if task_complete_step is  None else [0, 255, 0]  
+                        if square_color == [0,0,255]:
+                            print("红色")
+                        elif  square_color == [0, 255, 0]:
+                            print("绿色")
+                        # 左下角：行范围 [height - square_size, height)
+                        for row in range(height - square_size, height):
+                            for col in range(square_size):
+                                if 0 <= row < height and 0 <= col < width:
+                                    img_copy[row][col] = square_color
+                        image_dict[camera_name] = np.array(img_copy)
+                else:
+                    for camera_name in camera_names:
+                        image_dict[camera_name]=np.array(dict_[camera_name][i])
+                        qpos = self.persistentClient.get_arm_position_joint(1)
+                        radius_qpos = [math.radians(j) for j in qpos]
             else:
 
                 for camera_name in camera_names:
                     image_dict[camera_name] = np.array(dict_[camera_name][i])
-                qpos = dict_['qpos'][i]
-            radius_qpos = [math.radians(j) for j in qpos]
+                radius_qpos = dict_['qpos'][i]
+           
             
             # print(image_dict)
             ActionGeneration.image_dict = image_dict
@@ -321,15 +345,12 @@ class eval:
             # print(qpos)
             print(list(np.degrees(actions[:6])))
             if self.real_robot:
-                if self.data_true:
-                    self.persistentClient.set_arm_position(list(np.degrees(actions[:6])), "joint", 1)
+                if self.is_close(self.persistentClient.get_arm_position_joint(1),list(np.degrees(actions[:6]))):
+                    continue
                 else:
-                    if self.is_close(self.persistentClient.get_arm_position_joint(1),list(np.degrees(qpos[:6]))):
-                        continue
-                    else:
-                        self.persistentClient.set_arm_position(list(np.degrees(qpos[:6])), "joint", 1)
+                    self.persistentClient.set_arm_position(list(np.degrees(actions[:6])), "joint", 1)
             actions_list.append(actions)
-            loss.append((actions - dict_['action'][i]) ** 2)
+            # loss.append((actions - dict_['action'][i]) ** 2)
         today = current_time.strftime("%m-%d-%H-%M")
         path_save_image = os.path.join(os.getcwd(), "deploy_image", f"{today}")
         os.makedirs(path_save_image, exist_ok=True)
@@ -338,4 +359,4 @@ class eval:
         visualize_joints(dict_['qpos'], actions_list, image_path, STATE_NAMES=STATE_NAMES)
 
 if __name__ == '__main__':
-    eval(real_robot=False,data_true=False)
+    eval(real_robot=True,data_true=True)

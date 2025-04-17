@@ -7,13 +7,12 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 from itertools import repeat
 from tqdm import tqdm
-from einops import rearrange
 import time
 from utils import load_data  # data functions
 from utils import compute_dict_mean, set_seed, detach_dict, calibrate_linear_vel, postprocess_base_action  # helper functions
 # if False:
 from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy,HITPolicy
-# from policy_origin import ACTPolicy,CNNMLPPolicy,DiffusionPolicy
+from policy_origin import ACTPolicy,CNNMLPPolicy,DiffusionPolicy
 from visualize_episodes import save_videos
 import wandb
 # 限制 PyTorch 只能看到 GPU 1
@@ -31,13 +30,13 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/4-7/HDF5_FILE/act",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/4-7/HDF5_FILE",#数据集路径
+            'ckpt_dir': "/workspace/exchange/4-15/act_1",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/4-15/hdf5_file/origin",#数据集路径
             'model_type':'ACT',
             'policy_class': 'ACT',
             'task_name': 'train',
-            'batch_size': 1,
-            'seed': 8,
+            'batch_size': 16,
+            'seed': 0,
             'num_steps': 20000,
             'lr': 1e-5,
             'kl_weight': 10,
@@ -59,11 +58,11 @@ class Train:
             'vq': False,
             'no_encoder': False,
             'worker_num': 8,
-            'chunk_size': 15,
-            'num_queries':15,
+            'chunk_size': 45,
+            'num_queries':45,
             'hidden_dim': 512,
             'state_dim': 9,
-            'action_dim': 11,
+            'action_dim': 9,
             'dim_feedforward': 3200,
             'num_heads': 8,
             'backbone': 'resnet18',
@@ -82,6 +81,7 @@ class Train:
         }
  
     def main(self):
+        start_time = time.time()
         if self.args['wandb']:
             wandb.init(project=self.args['wandb_project'],name="train", config=self.args,settings=wandb.Settings(_disable_stats=True))
         # 从 self.args 中提取相关参数
@@ -128,6 +128,10 @@ class Train:
         # save best checkpoint
         ckpt_path = os.path.join(self.args['ckpt_dir'], f'policy_best.ckpt')
         torch.save(best_state_dict, ckpt_path)
+        # 记录日志
+        end_time = time.time()
+        runtime = end_time - start_time
+        self.append_log(best_step, min_val_loss, runtime)
         print(f'Best ckpt, val loss {min_val_loss:.6f} @ step{best_step}')
     def train(self, train_dataloader, val_dataloader):
         # 从 self.args 获取配置信息
@@ -304,7 +308,7 @@ class Train:
     def forward_pass(self,data,policy):
          # 解包输入数据，其中包含图像数据、qpos 数据、动作数据和填充标记
         image_data, qpos_data, action_data, is_pad = data
-
+        # print(action_data.shape)
         # 将所有输入数据移动到 GPU 上（使用 .cuda()）
         image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
 
@@ -320,6 +324,18 @@ class Train:
                 yield data
             print(f'Epoch {epoch} done')
             epoch += 1
+    def append_log(self, best_step, min_val_loss, runtime_seconds):
+        log_path = os.path.join(self.args['ckpt_dir'], 'log.txt')
+        with open(log_path, 'a') as f:
+            f.write(f"\n{'='*60}\n")    
+            f.write(f"Train Time: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Total Runtime: {runtime_seconds:.2f} seconds\n")
+            f.write(f"Best Step: {best_step}\n")
+            f.write(f"Min Validation Loss: {min_val_loss:.6f}\n")
+            f.write("Args:\n")
+            for k, v in self.args.items():
+                f.write(f"  {k}: {v}\n")
+
 if __name__ == '__main__':
     train = Train()
     train.main()

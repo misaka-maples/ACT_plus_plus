@@ -8,9 +8,9 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 from .backbone import build_backbone
 from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
-
+import matplotlib.pyplot as plt
 import numpy as np
-
+import cv2,os
 import IPython
 
 e = IPython.embed
@@ -32,7 +32,84 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
     return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
+def visualize_feature_on_image(image_tensor, feature_map_tensor, cam_name, frame_idx):
+    """
+    保存原图 + 可视化所有通道平均特征图的叠加。
+    每保存100张图像时保存一个视频。
+    image_tensor: [B, num_cam, 3, H, W]
+    feature_map_tensor: [B, C, H_feat, W_feat]
+    """
+    # Step 1: 取出图像并转为 numpy
+    camera_name_idx = {
+        'left_wrist': 2,
+        'top': 0,
+        'right_wrist': 1
+    }
+    img = image_tensor[0, camera_name_idx[cam_name]].detach().cpu()  # [3, H, W]
+    img_np = img.permute(1, 2, 0).numpy()  # [H, W, 3]
+    img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min() + 1e-5)
+    img_np = (img_np * 255).astype(np.uint8)
 
+    # Step 2: 保存原始 BGR 图像
+    os.makedirs("vis", exist_ok=True)
+    image_path = f"vis/rgb_cam{camera_name_idx[cam_name]}_{frame_idx}.png"
+    plt.figure(figsize=(8, 8))
+    plt.imshow(img_np[:, :, ::-1])  # Convert from RGB to BGR for matplotlib (OpenCV uses BGR)
+    plt.title(f"Original Image: Cam {camera_name_idx[cam_name]}")
+    plt.axis('off')
+    plt.tight_layout()
+    plt.savefig(image_path)
+    plt.close()
+
+    # Step 3: 平均所有通道的特征图并 resize
+    feat = feature_map_tensor[0].detach().cpu()  # [C, H_feat, W_feat]
+    feat_mean = feat.mean(dim=0, keepdim=True)  # [1, H_feat, W_feat]
+    feat_up = F.interpolate(feat_mean.unsqueeze(0), size=(img_np.shape[0], img_np.shape[1]), mode='bilinear', align_corners=False)
+    feat_up = feat_up[0, 0].numpy()
+
+    # Step 4: 热力图并转为 BGR
+    feat_norm = cv2.normalize(feat_up, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    heatmap = cv2.applyColorMap(feat_norm, cv2.COLORMAP_JET)
+
+    # Step 5: 融合图像与热力图 (保持 BGR 顺序)
+    overlay = cv2.addWeighted(img_np, 0.6, heatmap, 0.4, 0)
+
+    # Step 6: 保存叠加结果（BGR）
+    overlay_path = f"vis/feature_cam{camera_name_idx[cam_name]}_mean_{frame_idx}.png"
+    plt.figure(figsize=(8, 8))
+    plt.imshow(overlay[:, :, ::-1])  # Convert from BGR to RGB for matplotlib (OpenCV uses BGR)
+    plt.title(f"Feature Map Overlay: Cam {camera_name_idx[cam_name]} (Mean of All Channels)")
+    plt.axis('off')
+    plt.tight_layout()
+    plt.savefig(overlay_path)
+    plt.close()
+
+    # Step 7: 每100张图像保存一个视频
+    if frame_idx % 100 == 0:
+        images = []
+        for i in range(frame_idx - 100, frame_idx):
+            overlay_image_path = f"vis/feature_cam{camera_name_idx[cam_name]}_mean_{i}.png"
+            if os.path.exists(overlay_image_path):
+                img = cv2.imread(overlay_image_path)
+                if img is not None:
+                    images.append(img)
+                else:
+                    print(f"Warning: Failed to read image {overlay_image_path}")
+            else:
+                print(f"Warning: Image file {overlay_image_path} not found")
+
+        # 只有在成功读取图像的情况下才创建视频
+        if len(images) > 0:
+            height, width, layers = images[0].shape
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 使用 mp4v 编码器
+            video_writer = cv2.VideoWriter(f"vis/video_cam{camera_name_idx[cam_name]}.mp4", fourcc, 5.0, (width, height))
+
+            for img in images:
+                video_writer.write(img)
+
+            video_writer.release()
+            print(f"Video saved as vis/video_cam{camera_name_idx[cam_name]}.mp4")
+            return 0
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
 
@@ -64,10 +141,10 @@ class DETRVAE(nn.Module):
             # raise NotImplementedError
             # input_dim = 14 + 7 # robot_state + env_state
             self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
-            self.input_proj_env_state = nn.Linear(7, hidden_dim)
+            self.input_proj_env_state = nn.Linear(state_dim, hidden_dim)
             self.pos = torch.nn.Embedding(2, hidden_dim)
             self.backbones = None
-
+        self.frame_idx = 0
         # encoder extra parameters
         self.latent_dim = 32  # final size of latent z # TODO tune
         self.cls_embed = nn.Embedding(1, hidden_dim)  # extra cls token embedding
@@ -92,6 +169,7 @@ class DETRVAE(nn.Module):
         ### Obtain latent z from action sequence
         if is_training:
             # project action sequence to embedding dim, and concat with a CLS token
+            # print(actions.shape)
             action_embed = self.encoder_action_proj(actions)  # (bs, seq, hidden_dim)
             qpos_embed = self.encoder_joint_proj(qpos)  # (bs, hidden_dim)
             qpos_embed = torch.unsqueeze(qpos_embed, axis=1)  # (bs, 1, hidden_dim)
@@ -142,9 +220,16 @@ class DETRVAE(nn.Module):
                 features, pos = self.backbones[0](image[:, cam_id]) # HARDCODED
                 features = features[0] # take the last layer feature
                 pos = pos[0]
-                all_cam_features.append(self.input_proj(features))
+                features_proj = self.input_proj(features)
+                all_cam_features.append(features_proj)
                 all_cam_pos.append(pos)
 
+                # 可视化某个通道的特征（仅在调试阶段调用）
+                if cam_name == 'left_wrist':
+                    self.frame_idx += 1
+                    x = visualize_feature_on_image(image, features_proj,cam_name,self.frame_idx)
+                    if x is not None:
+                        self.frame_idx = 0
             # proprioception features
             proprio_input = self.input_proj_robot_state(qpos)
             # fold camera dimension into width dimension

@@ -17,8 +17,9 @@ from pathlib import Path
 # get_env()
 root_path = Path(__file__).resolve().parent.parent
 sys.path.append(str(root_path))
+# from policy_origin import ACTPolicy
+from policy import HITPolicy,ACTPolicy
 from policy_origin import ACTPolicy
-from policy import HITPolicy
 import torch
 import pickle
 import argparse
@@ -44,7 +45,7 @@ class ActionGenerator:
         config_path = os.path.join(self.ckpt_dir, 'config.pkl')
         with open(config_path, 'rb') as f:
             self.config_data = pickle.load(f)
-        self.config_data['temporal_agg'] = True
+        self.config_data['temporal_agg'] = False
         # print(self.config_data)
         # 设置配置
         # self.policy_config = {
@@ -186,8 +187,8 @@ class ActionGenerator:
         action = post_process(raw_action)
 
         # 拆分动作为目标关节位置和底座动作
-        target_qpos = action[:-2]
-        base_action = action[-2:]
+        target_qpos = action[:self.config_data['action_dim']]
+        # base_action = action[-2:]
 
         return target_qpos
 

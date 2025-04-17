@@ -1,6 +1,6 @@
 import copy
 import random
-
+from visualize_episodes import visualize_joints
 import matplotlib.pyplot as plt
 import sys
 from pathlib import Path
@@ -17,6 +17,8 @@ import traceback
 from constants import RIGHT_ARM_TASK_CONFIGS, HDF5_DIR, DATA_DIR
 camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
 max_timesteps = 0
+JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
+STATE_NAMES = JOINT_NAMES + ["gripper"]
 atrrbut = [ 'top', 'right_wrist', 'left_wrist', 'qpos', 'action']
 class Modify_hdf5:
     def __init__(self, compress=None, truncate_ranges=None, edit=False):
@@ -367,7 +369,7 @@ class Modify_hdf5:
                 os.rename(old_path, new_path)
                 print(f'✅ 已将 {filename} 重命名为 {new_name}')
                 index += 1
-    def modify_hdf5(self, file_path, compress=None, truncate_ranges=None, edit=False, exposure_factor=1, save_as_new_file=False):
+    def modify_hdf5(self, file_path, compress=None, truncate_ranges=None, edit=False, exposure_factor=1, save_as_new_file=False,arm = 'arm'):
         """
         修改 HDF5 文件中的摄像头数据，可进行解压、曝光调整、截断，并保存为新文件或覆盖原文件。
 
@@ -390,7 +392,8 @@ class Modify_hdf5:
 
             with h5py.File(file_path, 'r+') as f:
                 data = self.get_key(file_path)
-
+                print(data)
+                arm_path = [path for path in data if arm in path ]
                 # 获取路径
                 top_paths = [path for path in data if 'top' in path or 'high' in path]
                 right_paths = [path for path in data if 'right' in path]
@@ -632,6 +635,95 @@ class Modify_hdf5:
         except Exception as e:
 
             print(f"Error saving video:\n {e}")
+    def save_arm_video(self,file_path, fps=10, i=0, arm_path:str = None,exposure_factor = 0.5):
+        dataset_path = os.path.join(file_path, f'episode_{i}' + '.hdf5')
+        adjusted_images = []
+       
+        with h5py.File(dataset_path, 'r') as f:
+            # print(f.keys())
+            key = self.get_key(dataset_path)
+            # arm_path = 'observations/images/right_wrist'
+            if arm_path not in key:
+                raise KeyError(f"Path '{arm_path}' not found in the HDF5 file.\nvalue key{key}")
+        
+            arm_path_data = f[arm_path][()]  # 读取图像数据
+
+            compressed = f.attrs.get('compress', False)
+            image_list = []  # 用于存储解压后的帧
+            if compressed:
+                num_images = arm_path_data.shape[0]
+                for i in range(num_images):
+                    compressed_image = arm_path_data[i]
+                    # 解压为彩色图像
+                    decompressed_image = cv2.imdecode(compressed_image, 1)
+                    # 确保通道顺序是 BGR
+                    # decompressed_image = cv2.cvtColor(decompressed_image, cv2.COLOR_RGB2BGR)
+                    # image_list.append(decompressed_image)
+                    image_list.append(decompressed_image)
+            else:
+                # 假设数据直接是未压缩图像数组
+                image_list = [frame for frame in arm_path_data]
+                # >1 提亮，<1 变暗
+            for i, img in enumerate(image_list):
+                enhanced = np.clip(img * exposure_factor, 0, 255).astype(np.uint8)
+                adjusted_images.append(enhanced)
+            print(os.path.splitext(os.path.basename(dataset_path))[0])
+            arm_path_new = arm_path.replace('/', '_')
+            output_path = os.path.join(file_path, f"frame_{os.path.splitext(os.path.basename(dataset_path))[0]}_"+arm_path_new+".jpg")
+            # print(output_path)
+            # for i in range(len(image_list)):
+            # print(f"image_list_len:{len(image_list)}")
+            # output_path = os.path.join(file_path, f"frame_{os.path.splitext(os.path.basename(dataset_path))[0]}-{i}.jpg")
+            cv2.imwrite(output_path, adjusted_images[0][:, :, [0, 1, 2]])
+            # 如果图像列表为空，抛出错误
+            if not adjusted_images:
+                raise ValueError("No images found to save as video.")
+
+            # 获取帧的宽度和高度
+            frame_height, frame_width, _ = adjusted_images[0].shape
+
+            # 定义视频写入器
+
+            path = os.path.join(file_path, f"frame_{os.path.splitext(os.path.basename(dataset_path))[0]}_"+arm_path_new+".mp4")
+            video_writer = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (frame_width, frame_height))
+            print(path)
+            # 将每一帧写入视频
+            for frame in adjusted_images:
+                # image_list = image_list[:, :, [2, 1, 0]]  # 交换图像的B和R通道
+                frame = frame[:, :, [0, 1, 2]]
+                video_writer.write(frame)
+
+            # 释放视频写入器
+            video_writer.release()
+            if os.path.exists(path):
+                print(f"\nVideo saved successfully at {file_path}")
+            else:
+                raise "error to save video"
+
+    def visual_qpos_action(self,file_path):
+
+        with h5py.File(file_path, 'r') as f:
+            key = self.get_key(file_path)
+            
+            # 数据路径
+            qpos_path = 'observations/qpos'
+            action_path = 'action'
+            
+            # 提取数据
+            qpos_path_data = f[qpos_path][()]  
+            action_path_data = f[action_path][()]
+            
+            # 获取文件所在的根目录
+            root_dir = os.path.dirname(file_path)
+            
+            # 获取文件名（去除扩展名）
+            file_stem = os.path.splitext(os.path.basename(file_path))[0]
+            
+            # 构造图片保存路径
+            image_path = os.path.join(root_dir, file_stem + ".png")
+            
+            print(image_path)
+            visualize_joints(qpos_path_data, action_path_data, image_path, STATE_NAMES=STATE_NAMES)
 
 
     def get_image_paths(directory, prefix, extension):
@@ -797,18 +889,18 @@ if __name__ == '__main__':
     test = Modify_hdf5()
     # test.batch_modify_hdf5('/workspace/exchange/4-7')
     # test.modify_hdf5(
-    #     file_path='/workspace/exchange/4-7/episode_52.hdf5', 
+    #     file_path='/workspace/exchange/episode_1.hdf5', 
     #     compress=False,
     #     edit=False,
-    #     exposure_factor=0.8,
+    #     exposure_factor=1,
     #     save_as_new_file=False  # 不影响原始文件
     #     )
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # for i in range(32,53):
-    
-    test.save_video('/workspace/exchange/4-7', fps=10, i=43,arm='left_wrist',exposure_factor = 1)
-    #
+    test.save_arm_video('/workspace/exchange', fps=10, i=0,arm_path='observations/images/left_wrist',exposure_factor = 1)
+    # test.save_video('/workspace/exchange', fps=10, i=0,arm='left_wrist',exposure_factor = 1)
+    # test.visual_qpos_action('/workspace/exchange/4-15/hdf5_file/episode_91.hdf5')
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
     # top_image = "camera_top"

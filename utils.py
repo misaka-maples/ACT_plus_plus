@@ -182,8 +182,8 @@ class EpisodicDataset(torch.utils.data.Dataset):
                     action = np.concatenate([root['/action'][()], base_action], axis=-1)
                 else:
                     action = root['/action'][()]
-                    dummy_base_action = np.zeros([action.shape[0], 2])
-                    action = np.concatenate([action, dummy_base_action], axis=-1)
+                    # dummy_base_action = np.zeros([action.shape[0], 2])
+                    # action = np.concatenate([action, dummy_base_action], axis=-1)
                 original_action_shape = action.shape
                 episode_len = original_action_shape[0]
                 # get observation at start_ts only
@@ -284,8 +284,10 @@ def get_norm_stats(dataset_path_list):
                     action = np.concatenate([root['/action'][()], base_action], axis=-1)
                 else:
                     action = root['/action'][()]
-                    dummy_base_action = np.zeros([action.shape[0], 2])
-                    action = np.concatenate([action, dummy_base_action], axis=-1)
+                    # print(action.shape)
+                    # # action = np.array(action)
+                    # dummy_base_action = np.zeros([action.shape[0], 2])
+                    # action = np.concatenate([action, dummy_base_action], axis=-1)
         except Exception as e:
             print(f'Error loading {dataset_path} in get_norm_stats')
             print(e)

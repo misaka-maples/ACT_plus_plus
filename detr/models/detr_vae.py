@@ -373,7 +373,6 @@ def build_encoder(args):
 
 
 def build(args):
-    state_dim = args.state_dim # TODO hardcode
 
     # From state
     # backbone = None # from state for now, no need for conv nets
@@ -398,7 +397,7 @@ def build(args):
             backbones,
             transformer,
             encoder,
-            state_dim=state_dim,
+            state_dim= args.state_dim,
             num_queries=args.num_queries,
             camera_names=args.camera_names,
             vq=args.vq,
@@ -412,7 +411,7 @@ def build(args):
         model = DETRVAE_Decoder(
             backbones,
             transformer_decoder,
-            state_dim=state_dim,
+            state_dim= args.state_dim,
             num_queries=args.num_queries,
             camera_names=args.camera_names,
             action_dim=args.action_dim,

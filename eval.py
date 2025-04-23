@@ -28,7 +28,7 @@ tz = pytz.timezone('Asia/Shanghai')
 current_time = datetime.datetime.now(tz)
 # datetime.
 JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
-STATE_NAMES = JOINT_NAMES + ["gripper_state"]+ ["gripper_pos"]+ ["gripper_force"]
+STATE_NAMES = JOINT_NAMES +["gripper_pos"]+ ["gripper_force"]
 camera_names = ['top', 'right_wrist','left_wrist']
 
 class CAMERA_HOT_PLUG:
@@ -281,19 +281,21 @@ class eval:
         actions_list = []
         qpos_list_ = []
         loss = []
+        self.radius_qpos_list = []
+
         if self.real_robot:
             loop_len = 200
             task_complete_step = None
             square_size = 100
         else:
             data_dict = Modify_hdf5()
-            dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-15/hdf5_file/origin/episode_66.hdf5')
+            dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-21/episode_6.hdf5')
             # print(dict_["action"].shape)
             loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/4-2',
+            'ckpt_dir': r'/workspace/exchange/4-21/act_1-4-22',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_step_13000_seed_8.ckpt",
+            'ckpt_name': "policy_step_40000_seed_0.ckpt",
             'backbone': 'resnet18'
         }
         image_dict = {i:[] for i in camera_names}
@@ -332,23 +334,28 @@ class eval:
                         qpos = self.persistentClient.get_arm_position_joint(1)
                         radius_qpos = [math.radians(j) for j in qpos]
             else:
-
+                
                 for camera_name in camera_names:
                     image_dict[camera_name] = np.array(dict_[camera_name][i])
                 radius_qpos = dict_['qpos'][i]
            
-            
+            self.radius_qpos_list.append(radius_qpos)
             # print(image_dict)
             ActionGeneration.image_dict = image_dict
             ActionGeneration.qpos_list = radius_qpos
             actions = ActionGeneration.get_action()
             # print(qpos)
-            print(list(np.degrees(actions[:6])),list(actions[:6]))
+            # print(list(np.degrees(actions)))
+            left_arm_action = np.rad2deg(actions[:6])
+            right_arm_action= np.rad2deg(actions[8:14])
+            left_gp = actions[6:8]
+            right_gp = actions[14:16]
+            # print(actions[6:8],actions[14:16])
+            # print(left_arm_action,right_arm_action)
             if self.real_robot:
-                if self.is_close(self.persistentClient.get_arm_position_joint(1),list(np.degrees(actions[:6]))):
-                    continue
-                else:
-                    self.persistentClient.set_arm_position(list(np.degrees(actions[:6])), "joint", 1)
+
+                self.persistentClient.set_arm_position(list(left_arm_action), "joint", 1)
+                self.persistentClient.set_arm_position(list(right_arm_action), "joint", 2)
             actions_list.append(actions)
             # loss.append((actions - dict_['action'][i]) ** 2)
         today = current_time.strftime("%m-%d-%H-%M")
@@ -356,7 +363,8 @@ class eval:
         os.makedirs(path_save_image, exist_ok=True)
         image_path = os.path.join(path_save_image, config['backbone']+"_"+ os.path.splitext(config['ckpt_name'])[0]+ ".png")
         loss_apth = os.path.join(path_save_image, 'loss' + current_time.strftime("%m-%d+8-%H-%M") + ".png")
-        visualize_joints(dict_['qpos'], actions_list, image_path, STATE_NAMES=STATE_NAMES)
+       
+        visualize_joints(self.radius_qpos_list, actions_list, image_path, STATE_NAMES=STATE_NAMES)
 
 if __name__ == '__main__':
     eval(real_robot=False,data_true=False)

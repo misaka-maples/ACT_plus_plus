@@ -225,11 +225,11 @@ class DETRVAE(nn.Module):
                 all_cam_pos.append(pos)
 
                 # 可视化某个通道的特征（仅在调试阶段调用）
-                if cam_name == 'left_wrist':
-                    self.frame_idx += 1
-                    x = visualize_feature_on_image(image, features_proj,cam_name,self.frame_idx)
-                    if x is not None:
-                        self.frame_idx = 0
+                # if cam_name == 'left_wrist':
+                #     self.frame_idx += 1
+                #     x = visualize_feature_on_image(image, features_proj,cam_name,self.frame_idx)
+                #     if x is not None:
+                #         self.frame_idx = 0
             # proprioception features
             proprio_input = self.input_proj_robot_state(qpos)
             # fold camera dimension into width dimension

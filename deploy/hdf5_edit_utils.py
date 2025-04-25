@@ -525,13 +525,14 @@ class Modify_hdf5:
             skip_mirrored_data (bool): 是否跳过包含 "mirror" 的文件。
         """
         hdf5_files = self.find_all_hdf5(dataset_dir, skip_mirrored_data)
-        hdf5_files_ = self.filter_episodes_by_index(
-            file_paths=hdf5_files,
-            start=60,
-            end=80
-            )
+        # hdf5_files_ = self.filter_episodes_by_index(
+        #     file_paths=hdf5_files,
+        #     start=60,
+        #     end=80
+        #     )
         # print(hdf5_file_)
-        for file_path in hdf5_files_:
+        for file_path in hdf5_files:
+            print(file_path)
             # if output_dir:
             #     # 确保输出目录存在
             #     os.makedirs(output_dir, exist_ok=True)
@@ -544,10 +545,10 @@ class Modify_hdf5:
                 file_path=file_path, 
                 compress=False,
                 edit=False,
-                exposure_factor=0.6,
-                save_as_new_file=True  # 不影响原始文件
+                exposure_factor=1,
+                save_as_new_file=False  # 不影响原始文件
                 )
-        self.rename_modified_hdf5_files(dataset_dir,42)
+        # self.rename_modified_hdf5_files(dataset_dir,42)
 
     # rand = random.random()
 

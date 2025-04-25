@@ -17,7 +17,7 @@ from visualize_episodes import save_videos
 import wandb
 # 限制 PyTorch 只能看到 GPU 1
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 if torch.cuda.is_available():
     num_gpus = torch.cuda.device_count()
     for i in range(num_gpus):
@@ -44,7 +44,7 @@ class Train:
             'eval_every': 1000,
             'validate_every': 1000,
             'save_every': 1000,
-            'camera_names': ['top', 'right_wrist','left_wrist'],
+            'camera_names': ['top','left_wrist'],
             'resume_ckpt_path': 'ckpts/act/policy_best.ckpt',
             'skip_mirrored_data': False,
             'actuator_network_dir': None,
@@ -77,7 +77,8 @@ class Train:
             'dec_layers': 7, 
             'qpos_noise_std': 0,
             'train_ratio':0.87,
-            'context_len': 2776-15
+            'context_len': 946-45,
+            'device': torch.device("cuda" if torch.cuda.is_available() else "cpu")  
         }
  
     def main(self):

@@ -47,6 +47,7 @@ class ActionGenerator:
             self.config_data = pickle.load(f)
         self.config_data['temporal_agg'] = False
         # print(self.config_data)
+
         # 设置配置
         # self.policy_config = {
         #     # 'lr': args['lr'],

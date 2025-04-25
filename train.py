@@ -30,14 +30,14 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/4-15/act_1",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/4-15/hdf5_file/origin",#数据集路径
+            'ckpt_dir': "/workspace/exchange/4-24/act",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/4-24/hdf5_file_exchange",#数据集路径
             'model_type':'ACT',
             'policy_class': 'ACT',
             'task_name': 'train',
-            'batch_size': 16,
+            'batch_size': 8,
             'seed': 0,
-            'num_steps': 20000,
+            'num_steps': 80000,
             'lr': 1e-5,
             'kl_weight': 10,
             'load_pretrain': False,
@@ -61,8 +61,8 @@ class Train:
             'chunk_size': 45,
             'num_queries':45,
             'hidden_dim': 512,
-            'state_dim': 9,
-            'action_dim': 9,
+            'state_dim': 16,
+            'action_dim': 16,
             'dim_feedforward': 3200,
             'num_heads': 8,
             'backbone': 'resnet18',

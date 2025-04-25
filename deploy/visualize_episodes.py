@@ -13,7 +13,7 @@ e = IPython.embed
 
 # 定义关节和状态名称
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
-STATE_NAMES = JOINT_NAMES + ["gripper"]
+STATE_NAMES = JOINT_NAMES + ["gripper_pos"]+ ["gripper_force"]
 # results = subprocess.run(['h5check', './results/episode_1.hdf5'], capture_output=True, text=True)
 # if "File passed checksum test" in results.stdout:
 #     print("File passed checksum test")

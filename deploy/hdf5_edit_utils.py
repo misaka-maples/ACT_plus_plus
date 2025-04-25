@@ -18,7 +18,7 @@ from constants import RIGHT_ARM_TASK_CONFIGS, HDF5_DIR, DATA_DIR
 camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
 max_timesteps = 0
 JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
-STATE_NAMES = JOINT_NAMES + ["gripper"]
+STATE_NAMES = JOINT_NAMES + ["gripper_pos"]+ ["gripper_force"]
 atrrbut = [ 'top', 'right_wrist', 'left_wrist', 'qpos', 'action']
 class Modify_hdf5:
     def __init__(self, compress=None, truncate_ranges=None, edit=False):
@@ -35,6 +35,8 @@ class Modify_hdf5:
         print(f'Found {len(hdf5_files)} hdf5 files')
         return hdf5_files
     def check_hdf5(self, file_path):
+        if not os.path.exists(file_path):
+            print("文件不存在")
         try:
             with h5py.File(file_path, 'r') as f:
                 compressed = f.attrs.get('compress', False)
@@ -409,7 +411,7 @@ class Modify_hdf5:
                 left = left_paths[0]
                 qpos_key = qpos_paths[0]
                 action_key = action_paths[0]
-
+                print(qpos_key)
                 # 加载数据（可选择 copy）
                 if save_as_new_file:
                     camera_top_data = f[top][:].copy()
@@ -423,7 +425,14 @@ class Modify_hdf5:
                     camera_left_data = f[left][:]
                     qpos = f[qpos_key][:]
                     actions = f[action_key][:]
-
+                # print(qpos)
+                camera_top_data_np = np.array(camera_top_data)
+                camera_right_data_np = np.array(camera_right_data)
+                camera_left_data_np = np.array(camera_left_data)
+                qpos_np = np.array(qpos)
+                actions_np = np.array(actions)
+                len_ = camera_top_data_np.shape[0]
+                print(camera_top_data_np.shape,camera_right_data_np.shape,camera_left_data_np.shape,qpos_np.shape,actions_np.shape)
                 if edit:
                     def decompress_images(compressed_data):
                         image_list = []
@@ -880,27 +889,28 @@ class Modify_hdf5:
 
 
 if __name__ == '__main__':
-    # truncate_ranges = {
-    #     'top': (45, 100),
-    #     'action': (45, 100),
-    #     'right_wrist': (45, 100),
-    #     'qpos': (45, 100),
-    # }
+    truncate_ranges = {
+        'top': (0, 558),
+        'action': (0, 558),
+        'right_wrist': (0, 558),
+        'qpos': (0, 558),
+    }
     test = Modify_hdf5()
     # test.batch_modify_hdf5('/workspace/exchange/4-7')
-    # test.modify_hdf5(
-    #     file_path='/workspace/exchange/episode_1.hdf5', 
-    #     compress=False,
-    #     edit=False,
-    #     exposure_factor=1,
-    #     save_as_new_file=False  # 不影响原始文件
-    #     )
+    test.modify_hdf5(
+        file_path='/workspace/exchange/4-24/episode_1.hdf5', 
+        compress=False,
+        edit=False,
+        exposure_factor=1,
+        save_as_new_file=False,  # 不影响原始文件
+        truncate_ranges=truncate_ranges
+        )
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # for i in range(32,53):
-    test.save_arm_video('/workspace/exchange', fps=10, i=0,arm_path='observations/images/left_wrist',exposure_factor = 1)
-    # test.save_video('/workspace/exchange', fps=10, i=0,arm='left_wrist',exposure_factor = 1)
-    # test.visual_qpos_action('/workspace/exchange/4-15/hdf5_file/episode_91.hdf5')
+    # test.save_arm_video('/workspace/exchange', fps=10, i=0,arm_path='observations/images/left_wrist',exposure_factor = 1)
+    test.save_video('/workspace/exchange/4-24', fps=10, i=1,arm='left_wrist',exposure_factor = 1)
+    test.visual_qpos_action('/workspace/exchange/4-24/episode_0.hdf5')
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
     # top_image = "camera_top"

@@ -18,7 +18,7 @@ from constants import RIGHT_ARM_TASK_CONFIGS, HDF5_DIR, DATA_DIR
 camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
 max_timesteps = 0
 JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
-STATE_NAMES = JOINT_NAMES + ["gripper"]
+STATE_NAMES = JOINT_NAMES + ["gripper_pos"]+ ["gripper_force"]
 atrrbut = [ 'top', 'right_wrist', 'left_wrist', 'qpos', 'action']
 class Modify_hdf5:
     def __init__(self, compress=None, truncate_ranges=None, edit=False):
@@ -423,8 +423,8 @@ class Modify_hdf5:
                     camera_top_data = f[top][:]
                     camera_right_data = f[right][:]
                     camera_left_data = f[left][:]
-                    qpos = f[qpos_key][:]
-                    actions = f[action_key][:]
+                    qpos = f[qpos_key][:,:8]
+                    actions = f[action_key][:,:8]
                 # print(qpos)
                 camera_top_data_np = np.array(camera_top_data)
                 camera_right_data_np = np.array(camera_right_data)
@@ -525,13 +525,14 @@ class Modify_hdf5:
             skip_mirrored_data (bool): 是否跳过包含 "mirror" 的文件。
         """
         hdf5_files = self.find_all_hdf5(dataset_dir, skip_mirrored_data)
-        hdf5_files_ = self.filter_episodes_by_index(
-            file_paths=hdf5_files,
-            start=60,
-            end=80
-            )
+        # hdf5_files_ = self.filter_episodes_by_index(
+        #     file_paths=hdf5_files,
+        #     start=60,
+        #     end=80
+        #     )
         # print(hdf5_file_)
-        for file_path in hdf5_files_:
+        for file_path in hdf5_files:
+            print(file_path)
             # if output_dir:
             #     # 确保输出目录存在
             #     os.makedirs(output_dir, exist_ok=True)
@@ -544,10 +545,10 @@ class Modify_hdf5:
                 file_path=file_path, 
                 compress=False,
                 edit=False,
-                exposure_factor=0.6,
-                save_as_new_file=True  # 不影响原始文件
+                exposure_factor=1,
+                save_as_new_file=False  # 不影响原始文件
                 )
-        self.rename_modified_hdf5_files(dataset_dir,42)
+        # self.rename_modified_hdf5_files(dataset_dir,42)
 
     # rand = random.random()
 
@@ -889,28 +890,28 @@ class Modify_hdf5:
 
 
 if __name__ == '__main__':
-    truncate_ranges = {
-        'top': (0, 558),
-        'action': (0, 558),
-        'right_wrist': (0, 558),
-        'qpos': (0, 558),
-    }
+    # truncate_ranges = {
+    #     'top': (0, 558),
+    #     'action': (0, 558),
+    #     'right_wrist': (0, 558),
+    #     'qpos': (0, 558),
+    # }
     test = Modify_hdf5()
-    # test.batch_modify_hdf5('/workspace/exchange/4-7')
-    test.modify_hdf5(
-        file_path='/workspace/exchange/4-21/episode_29.hdf5', 
-        compress=False,
-        edit=True,
-        exposure_factor=1,
-        save_as_new_file=False,  # 不影响原始文件
-        truncate_ranges=truncate_ranges
-        )
+    test.batch_modify_hdf5('/workspace/exchange/4-24/hdf5_file_duikong')
+    # test.modify_hdf5(
+    #     file_path='/workspace/exchange/4-24/hdf5_file_duikong/episode_6.hdf5', 
+    #     compress=False,
+    #     edit=False,
+    #     exposure_factor=1,
+    #     save_as_new_file=False,  # 不影响原始文件
+    #     truncate_ranges=None
+    #     )
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # for i in range(32,53):
     # test.save_arm_video('/workspace/exchange', fps=10, i=0,arm_path='observations/images/left_wrist',exposure_factor = 1)
-    # test.save_video('/workspace/exchange', fps=10, i=0,arm='left_wrist',exposure_factor = 1)
-    # test.visual_qpos_action('/workspace/exchange/4-21/episode_21.hdf5')
+    # test.save_video('/workspace/exchange/4-24/hdf5_file_duikong', fps=10, i=6,arm='left_wrist',exposure_factor = 1)
+    # test.visual_qpos_action('/workspace/exchange/4-24/hdf5_file_duikong/episode_6.hdf5')
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
     # top_image = "camera_top"

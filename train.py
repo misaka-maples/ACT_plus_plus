@@ -12,11 +12,11 @@ from utils import load_data  # data functions
 from utils import compute_dict_mean, set_seed, detach_dict, calibrate_linear_vel, postprocess_base_action  # helper functions
 # if False:
 from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy,HITPolicy
-# from policy_origin import ACTPolicy,CNNMLPPolicy,DiffusionPolicy
+from policy_origin import ACTPolicy,CNNMLPPolicy,DiffusionPolicy
 from visualize_episodes import save_videos
 import wandb
 # 限制 PyTorch 只能看到 GPU 1
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 if torch.cuda.is_available():
     num_gpus = torch.cuda.device_count()
@@ -30,8 +30,8 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/4-21/act_1-4-23",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/4-21",#数据集路径
+            'ckpt_dir': "/workspace/exchange/4-24/hdf5_file_duikong/hit",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/4-24/hdf5_file_duikong",#数据集路径
             'model_type':'ACT',
             'policy_class': 'ACT',
             'task_name': 'train',
@@ -44,7 +44,7 @@ class Train:
             'eval_every': 1000,
             'validate_every': 1000,
             'save_every': 1000,
-            'camera_names': ['top', 'right_wrist','left_wrist'],
+            'camera_names': ['top','left_wrist'],
             'resume_ckpt_path': 'ckpts/act/policy_best.ckpt',
             'skip_mirrored_data': False,
             'actuator_network_dir': None,
@@ -61,8 +61,8 @@ class Train:
             'chunk_size': 45,
             'num_queries':45,
             'hidden_dim': 512,
-            'state_dim': 16,
-            'action_dim': 16,
+            'state_dim': 8,
+            'action_dim': 8,
             'dim_feedforward': 3200,
             'num_heads': 8,
             'backbone': 'resnet18',
@@ -77,7 +77,7 @@ class Train:
             'dec_layers': 7, 
             'qpos_noise_std': 0,
             'train_ratio':0.87,
-            'context_len': 2776-15,
+            'context_len': 946-45,
             'device': torch.device("cuda" if torch.cuda.is_available() else "cpu")  
         }
  

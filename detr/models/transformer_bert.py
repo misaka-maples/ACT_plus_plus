@@ -78,6 +78,7 @@ class Transformer_BERT(nn.Module):
         # 维度安全检查
         expected_len = self.context_len + self.query_num
         # print(x.shape)
+        # print(self.context_len )
         assert x.shape[0] == expected_len, \
             f"Expected x.shape[0]={expected_len}, but got {x.shape[0]}"
 

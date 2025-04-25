@@ -195,6 +195,7 @@ class CAMERA_HOT_PLUG:
         for device in config["devices"]:
             multi_device_sync_config[device["serial_number"]] = device
             print(f"📷 Device {device['serial_number']}: {device['config']['mode']}")
+
 class eval:
     def __init__(self,real_robot=False,data_true=False):
         self.real_robot = real_robot
@@ -289,13 +290,13 @@ class eval:
             square_size = 100
         else:
             data_dict = Modify_hdf5()
-            dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-21/episode_6.hdf5')
+            dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-24/hdf5_file_duikong/episode_16.hdf5')
             # print(dict_["action"].shape)
             loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/4-21/act_1-4-22',
+            'ckpt_dir': r'/workspace/exchange/4-24/hdf5_file_duikong/hit',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_step_40000_seed_0.ckpt",
+            'ckpt_name': "policy_step_1000_seed_0.ckpt",
             'backbone': 'resnet18'
         }
         image_dict = {i:[] for i in camera_names}

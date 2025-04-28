@@ -11,7 +11,7 @@
         <!--File log output level-->
         <FileLogLevel>0</FileLogLevel>
         <!--Console log output level-->
-        <ConsoleLogLevel>1</ConsoleLogLevel>
+        <ConsoleLogLevel>3</ConsoleLogLevel>
         <!--Default log output file path, string type. If this item is not configured, the default path will be used: Win/Linux: "./Log"; Android: "/sdcard/Orbbec/Log"-->
         <!--<OutputDir>./log</OutputDir>-->
         <!--Default log output file size, int type, unit: MB-->
@@ -2340,7 +2340,7 @@
 				<!--The maximum frame interval time, if this value is exceeded, it will be judged that the stream is interrupted-->
 				<MaxFrameIntervalMs>2000</MaxFrameIntervalMs>
                 <!--The resolution width is enabled by default, int type-->
-                <Width>848</Width>
+                <Width>640</Width>
                 <!--High resolution is enabled by default, int type-->
                 <Height>480</Height>
                 <!--The frame rate of the resolution enabled by default, int type-->

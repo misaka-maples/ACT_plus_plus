@@ -4,12 +4,24 @@ import time
 import json
 from pyorbbecsdk import *
 import numpy as np
-import cv2
 from queue import Queue
-config_file_path = os.path.join(os.path.dirname(__file__), "./config/multi_device_sync_config.json")
+import cv2
+# 获取当前脚本的路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 获取上一级目录
+parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
+
+# 添加到 sys.path
+sys.path.append(parent_dir)
+config_file_path = os.path.join(os.path.dirname(__file__), "../config/multi_device_sync_config.json")
 from utils import frame_to_bgr_image
+
+multi_device_sync_config = {}
+
 MAX_DEVICES = 5  # 假设最多支持 5 台设备
 MAX_QUEUE_SIZE = 10  # 最大帧队列长度
+
 class CAMERA_HOT_PLUG:
     def __init__(self):
         self.mutex = threading.Lock()
@@ -21,6 +33,7 @@ class CAMERA_HOT_PLUG:
         self.serial_number_list: list[str] = ["" for _ in range(self.curr_device_cnt)]
         self.color_frames_queue: dict[str, Queue] = {}
         self.depth_frames_queue: dict[str, Queue] = {}
+        # self.temporal_filter = TemporalFilter(alpha=0.5)  # Modify alpha based on desired smoothness
 
         self.setup_cameras()
         self.start_streams()
@@ -55,6 +68,8 @@ class CAMERA_HOT_PLUG:
         if self.curr_device_cnt > MAX_DEVICES:
             print("⚠️ Too many devices connected")
             return
+
+        self.align_filter = AlignFilter(align_to_stream=OBStreamType.COLOR_STREAM)
 
         for i in range(self.curr_device_cnt):
             device = self.device_list.get_device_by_index(i)
@@ -118,10 +133,16 @@ class CAMERA_HOT_PLUG:
             if serial_number not in self.color_frames_queue:
                 print(f"⚠️ WARN: 未识别的相机序列号 {serial_number}，跳过帧处理")
                 return
-
+            if not frames:
+                return None
+            
             color_frame = frames.get_color_frame()
             depth_frame = frames.get_depth_frame()
-
+            if not color_frame or not depth_frame:
+                return None
+            frames = self.align_filter.process(frames)
+            color_frame = frames.get_color_frame()
+            depth_frame = frames.get_depth_frame()
             if color_frame:
                 if self.color_frames_queue[serial_number].qsize() >= MAX_QUEUE_SIZE:
                     self.color_frames_queue[serial_number].get()
@@ -133,10 +154,14 @@ class CAMERA_HOT_PLUG:
                 self.depth_frames_queue[serial_number].put(depth_frame)
 
     def rendering_frame(self, max_wait=5):
-        image_dict: dict[str, np.ndarray] = {}
+        color_image_dict: dict[str, np.ndarray] = {}
+        depth_image_dict: dict[str, np.ndarray] = {}
+        
         start_time = time.time()
         color_width, color_height = None, None
-        while len(image_dict) != self.curr_device_cnt:
+        # print(len(color_image_dict),self.curr_device_cnt)
+        while len(color_image_dict) != self.curr_device_cnt:
+            # print(len(color_image_dict))
             if time.time() - start_time > max_wait:
                 print("⚠️ WARN: 渲染超时，部分相机未收到帧数据")
                 break
@@ -148,12 +173,33 @@ class CAMERA_HOT_PLUG:
                     continue
                 color_width, color_height = color_frame.get_width(), color_frame.get_height()
                 color_image = frame_to_bgr_image(color_frame)
-                image_dict[serial_number] = color_image
+                color_image_dict[serial_number] = color_image
+            # for serial_number in self.depth_frames_queue.keys():
+                depth_frame = None
+                if not self.depth_frames_queue[serial_number].empty():
+                    depth_frame = self.depth_frames_queue[serial_number].get()
+                if depth_frame is None:
+                    continue
+                depth_data = np.frombuffer(depth_frame.get_data(), dtype=np.uint16).reshape(
+                    (depth_frame.get_height(), depth_frame.get_width()))
+                depth_data = depth_data.astype(np.float32) * depth_frame.get_depth_scale()
 
-        return image_dict,color_width, color_height
-    def get_images(self, sn):
-        image_dict,color_width, color_height = self.rendering_frame()
-        return image_dict[sn],color_width, color_height
+                depth_image = cv2.normalize(depth_data, None, 0, 255, cv2.NORM_MINMAX)
+                depth_image = cv2.applyColorMap(depth_image.astype(np.uint8), cv2.COLORMAP_JET)
+                # print("color_image.shape:", color_image.shape)
+                # print("depth_image.shape:", depth_image.shape)
+                depth_image_dict[serial_number] = depth_data
+                # depth_image = cv2.addWeighted(color_image, 0.5, depth_image, 0.5, 0)
+                if serial_number == 'CP1L44P0004Y':
+                    cv2.imwrite("color.png",color_image)
+                    # cv2.imwrite("depth.png", depth_image)
+                    np.save("depth.npy",depth_data)
+                # image_dict[serial_number] = depth_image
+
+        return color_image_dict,depth_image_dict,color_width, color_height
+    def get_images(self):
+        color_image_dict,depth_image_dict,color_width, color_height = self.rendering_frame()
+        return color_image_dict,depth_image_dict,color_width, color_height
     def sync_mode_from_str(self, sync_mode_str: str) -> OBMultiDeviceSyncMode:
         """将字符串转换为同步模式"""
         sync_mode_str = sync_mode_str.upper()
@@ -180,6 +226,10 @@ class CAMERA_HOT_PLUG:
 
 if __name__ == "__main__":
     camera = CAMERA_HOT_PLUG()
-    right_camera_sn = 'CP1L44P0004Y'
-    image = camera.get_images(right_camera_sn)
-    print(image)
+    right_camera_sn = 'CP1L44P0006E'
+    while True:
+        color_image_dict,depth_image_dict,color_width, color_height = camera.get_images()
+        color_image_dict_np = np.array(color_image_dict[right_camera_sn],dtype=object)
+        print(color_image_dict_np.shape)
+        depth_image_dict_np = np.array(depth_image_dict[right_camera_sn],dtype=object)
+        print(depth_image_dict_np.shape)

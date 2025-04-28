@@ -1,5 +1,14 @@
 # from datetime import datetime
+
 import os, datetime, sys
+# 获取当前脚本的路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 获取上一级目录
+parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
+
+# 添加到 sys.path
+sys.path.append(parent_dir)
 import threading
 import time
 import json
@@ -14,7 +23,8 @@ from utils import frame_to_bgr_image
 MAX_DEVICES = 5  # 假设最多支持 5 台设备
 MAX_QUEUE_SIZE = 10  # 最大帧队列长度
 multi_device_sync_config = {}
-config_file_path = os.path.join(os.path.dirname(__file__), "./config/multi_device_sync_config.json")
+
+config_file_path = os.path.join(os.path.dirname(__file__), "../config/multi_device_sync_config.json")
 from networkx.readwrite.json_graph.tree import tree_data
 from triton.language.semantic import store
 from deploy.hdf5_edit_utils import Modify_hdf5
@@ -31,7 +41,7 @@ current_time = datetime.datetime.now(tz)
 JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
 STATE_NAMES = JOINT_NAMES +["gripper_pos"]+ ["gripper_force"]
 camera_names = ['top', 'right_wrist','left_wrist']
-
+# from camera_hot_plug import CAMERA_HOT_PLUG
 class CAMERA_HOT_PLUG:
     def __init__(self):
         self.mutex = threading.Lock()
@@ -225,6 +235,7 @@ class GPCONTROL(threading.Thread):
 
     def run(self):
         while self.running:
+
             # print(f"self.state_data_1:{self.state_data_1}\n,self.state_data_2:{self.state_data_2}")
             if self.state_data_1<0:
                 self.state_data_1=0
@@ -432,14 +443,21 @@ class GPCONTROL(threading.Thread):
 
 
 class eval:
-    def __init__(self,real_robot=False,data_true=False):
+    def __init__(self,camera,persistentClient,gp_contrpl,real_robot=False,data_true=False,ckpt_dir=r'/workspace/exchange/4-24/act',ckpt_name="policy_step_78000_seed_0.ckpt",hdf5_path=r'/workspace/exchange/4-24/hdf5_file_exchange/episode_6.hdf5',state_dim=8):
         self.real_robot = real_robot
         self.data_true = data_true
+        self.ckpt_dir = ckpt_dir
+        self.ckpt_name=ckpt_name
+        self.hdf5_path = hdf5_path
+        self.state_dim = 8
         if self.real_robot:
-            self.camera = CAMERA_HOT_PLUG()
-            self.persistentClient = PersistentClient('192.168.3.15', 8001)
+            self.camera:CAMERA_HOT_PLUG = camera
+            self.persistentClient:PersistentClient = persistentClient
+            self.gp_contrpl:GPCONTROL = gp_contrpl
+            # self.gp_contrpl.start()
             self.image = {'top': [], 'right_wrist': [], 'left_wrist':[]}
             self.main()
+
         else:
             self.main()
     
@@ -520,20 +538,19 @@ class eval:
         self.radius_qpos_list = []
 
         if self.data_true:
-            self.gp_contrpl = GPCONTROL()
-            self.gp_contrpl.start()
+
             loop_len = 200
             task_complete_step = None
             square_size = 100
         else:
             data_dict = Modify_hdf5()
-            dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-28/hdf5_file_exchange_new/episode_6.hdf5')
+            dict_ = data_dict.check_hdf5(self.hdf5_path)
             # print(dict_["action"].shape)
             loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/4-28/hdf5_file_exchange_new/act',
+            'ckpt_dir': self.ckpt_dir,
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_step_1000_seed_0.ckpt",
+            'ckpt_name': self.ckpt_name,
             'backbone': 'resnet18'
         }
         image_dict = {i:[] for i in camera_names}
@@ -559,15 +576,11 @@ class eval:
                     radius_qpos.extend([math.radians(j) for j in right_qpos])
                     gpstate, gppos, gpforce = map(lambda x: str(x) if not isinstance(x, str) else x, right_gp)
                     radius_qpos.extend([int(gppos, 16), int(gpforce, 16)])
-                    # radius_qpos.append(left_pos)
-                    # radius_qpos.append(left_force)
-                    # radius_qpos.append(right_qpos)
-                    # radius_qpos.append(right_pos)
-                    # radius_qpos.append(right_force)
-                    # print(radius_qpos)
+
                     # if self.is_close(self.persistentClient.get_arm_position_joint(1)[:3],[-121.42, -599.741, -209.687]) or i >30:
                     #     task_complete_step = 1
                     for camera_name in camera_names:
+                        # self.image[camera_name] = 
                         image_dict[camera_name] = self.image[camera_name]
                         # qpos = self.persistentClient.get_arm_position_joint(1)
                         # radius_qpos = [math.radians(j) for j in qpos]
@@ -607,19 +620,32 @@ class eval:
             # print(list(np.degrees(actions)))
             left_arm_action = np.rad2deg(actions[:6])
             right_arm_action= np.rad2deg(actions[8:14])
-            left_gp = actions[6:8]*0.4
-            right_gp = 120-actions[14:16]
+            left_gp = actions[6:8]
+            right_gp = actions[14:16]
             # print(left_gp,right_gp)
             # print(actions[6:8],actions[14:16])
-            # print(left_arm_action,right_arm_action)
+            print(left_arm_action,left_gp,right_arm_action,right_gp)
             if self.real_robot:
-                if right_arm_action[5]>360:
-                    right_arm_action[5]=358
-                self.persistentClient.set_arm_position(list(right_arm_action), "joint", 2)
+                # if right_arm_action[5]>360:
+                #     right_arm_action[5]=358
+
+                if self.is_close(self.persistentClient.get_arm_position_pose(1),[-106.669, -814.076, -287.101, 2.47181, -0.00227704, 1.49762]) and complete_sign == 0:
+                    complete_sign = 1
+                    
+                    break
+                # print(type(right_gp),type(right_arm_action))
+                if right_arm_action.size == 0:
+                    pass
+                else:
+                    self.persistentClient.set_arm_position(list(right_arm_action), "joint", 2)
                 self.persistentClient.set_arm_position(list(left_arm_action), "joint", 1)
-                print(int(left_gp[0]),int(right_gp[0]))
+                # print(int(left_gp[0]))
                 self.gp_contrpl.state_data_1=int(left_gp[0])
-                self.gp_contrpl.state_data_2=int(right_gp[0])
+                if right_gp.size == 0:
+                    pass
+                else:
+                    print("设置右手")
+                    self.gp_contrpl.state_data_2=int(right_gp[0])
             actions_list.append(actions)
             # loss.append((actions - dict_['action'][i]) ** 2)
         today = current_time.strftime("%m-%d-%H-%M")
@@ -627,8 +653,20 @@ class eval:
         os.makedirs(path_save_image, exist_ok=True)
         image_path = os.path.join(path_save_image, config['backbone']+"_"+ os.path.splitext(config['ckpt_name'])[0]+ ".png")
         loss_apth = os.path.join(path_save_image, 'loss' + current_time.strftime("%m-%d+8-%H-%M") + ".png")
-       
-        visualize_joints(self.radius_qpos_list, actions_list, image_path, STATE_NAMES=STATE_NAMES)
-
+        radius_qpos_list_ = [row[:self.state_dim] for row in self.radius_qpos_list]
+        # print(np.array(radius_qpos_list_).shape, np.array(actions_list).shape)
+        visualize_joints(radius_qpos_list_, actions_list, image_path, STATE_NAMES=STATE_NAMES)
+        # sys.exit(0)
+        # os._exit(0)
+        # self.gp_contrpl.stop()
+        print("执行完成")
+complete_sign = 0
 if __name__ == '__main__':
-    eval(real_robot=False,data_true=False)
+    camera = CAMERA_HOT_PLUG()
+    robot = PersistentClient('192.168.3.15', 8001)
+    gpcontrol = GPCONTROL()
+    gpcontrol.start()
+    eval(camera=camera,persistentClient=robot,gp_contrpl=gpcontrol,real_robot=True,data_true=True,ckpt_dir=r'/workspace/exchange/4-24/act',ckpt_name='policy_best.ckpt',hdf5_path=r'/workspace/exchange/4-24/hdf5_file_exchange/episode_39.hdf5',state_dim=16)
+    # time.sleep(2)
+    # eval(camera=camera,persistentClient=robot,gp_contrpl=gpcontrol,real_robot=False,data_true=False,ckpt_dir=r'/workspace/exchange/4-25',ckpt_name='policy_best.ckpt',hdf5_path=r'/workspace/exchange/4-24/hdf5_file_duikong/episode_40.hdf5',state_dim=8)
+    # print("qwekqweqwe")

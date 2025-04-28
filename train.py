@@ -17,7 +17,7 @@ from visualize_episodes import save_videos
 import wandb
 # 限制 PyTorch 只能看到 GPU 1
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 if torch.cuda.is_available():
     num_gpus = torch.cuda.device_count()
     for i in range(num_gpus):
@@ -30,8 +30,8 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/4-24/act",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/4-24/hdf5_file_exchange",#数据集路径
+            'ckpt_dir': "/workspace/exchange/4-28/hdf5_file_exchange_new/act",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/4-28/hdf5_file_exchange_new",#数据集路径
             'model_type':'ACT',
             'policy_class': 'ACT',
             'task_name': 'train',
@@ -44,7 +44,7 @@ class Train:
             'eval_every': 1000,
             'validate_every': 1000,
             'save_every': 1000,
-            'camera_names': ['top','left_wrist'],
+            'camera_names': ['top','left_wrist','right_wrist'],
             'resume_ckpt_path': 'ckpts/act/policy_best.ckpt',
             'skip_mirrored_data': False,
             'actuator_network_dir': None,

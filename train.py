@@ -30,8 +30,8 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/4-28/hdf5_file_exchange_new/act",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/4-28/hdf5_file_exchange_new",#数据集路径
+            'ckpt_dir': "/workspace/exchange/hdf5_file_exchange_5-9_degrees/act",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/hdf5_file_exchange_5-9_degrees",#数据集路径
             'model_type':'ACT',
             'policy_class': 'ACT',
             'task_name': 'train',

@@ -527,14 +527,15 @@ class eval:
             square_size = 100
         else:
             data_dict = Modify_hdf5()
-            dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-28/hdf5_file_exchange_new/episode_6.hdf5')
+            dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-28/hdf5_file_exchange_new/episode_18.hdf5')
             # print(dict_["action"].shape)
             loop_len = len(dict_['top'])
         config = {
             'ckpt_dir': r'/workspace/exchange/4-28/hdf5_file_exchange_new/act',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_step_1000_seed_0.ckpt",
-            'backbone': 'resnet18'
+            'ckpt_name': "policy_step_54000_seed_0.ckpt",
+            'backbone': 'resnet18',
+            'temporal_agg':True,
         }
         image_dict = {i:[] for i in camera_names}
         # print(image_dict)
@@ -597,7 +598,7 @@ class eval:
                 for camera_name in camera_names:
                     image_dict[camera_name] = np.array(dict_[camera_name][i])
                 radius_qpos = dict_['qpos'][i]
-           
+            # print(np.array(radius_qpos).shape)
             self.radius_qpos_list.append(radius_qpos)
             # print(image_dict)
             ActionGeneration.image_dict = image_dict

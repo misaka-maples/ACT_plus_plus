@@ -227,6 +227,7 @@ class CAMERA_HOT_PLUG:
 if __name__ == "__main__":
     camera = CAMERA_HOT_PLUG()
     right_camera_sn = 'CP1L44P0006E'
+    
     while True:
         color_image_dict,depth_image_dict,color_width, color_height = camera.get_images()
         color_image_dict_np = np.array(color_image_dict[right_camera_sn],dtype=object)

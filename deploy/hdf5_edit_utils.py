@@ -371,7 +371,18 @@ class Modify_hdf5:
                 os.rename(old_path, new_path)
                 print(f'✅ 已将 {filename} 重命名为 {new_name}')
                 index += 1
-    def modify_hdf5(self, file_path, compress=None, truncate_ranges=None, edit=False, exposure_factor=1, save_as_new_file=False,arm = 'arm'):
+    def gray_image(self,color_images):
+        '''Step 2：扩展成 (95, 480, 640, 3)，复制三次'''
+        gray_images = (
+                    0.299 * color_images[:, :, :, 0] +
+                    0.587 * color_images[:, :, :, 1] +
+                    0.114 * color_images[:, :, :, 2]
+                ).astype(np.uint8)  # (95, 480, 640)
+
+                
+        gray_images_3ch = np.stack([gray_images]*3, axis=-1)
+        return gray_images_3ch
+    def modify_hdf5(self, file_path, compress=None, truncate_ranges=None, edit=False, exposure_factor=1, save_as_new_file=False,arm = 'arm',gray = False,one_arm=False):
         """
         修改 HDF5 文件中的摄像头数据，可进行解压、曝光调整、截断，并保存为新文件或覆盖原文件。
 
@@ -385,13 +396,24 @@ class Modify_hdf5:
         """
         try:
             # 若保存为新文件，先复制原始文件
-            if save_as_new_file:
-                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-                new_file_path = file_path.replace('.hdf5', f'_modified_{timestamp}.hdf5')
-                shutil.copy(file_path, new_file_path)
-                print(f"[INFO] 原始文件复制为: {new_file_path}")
-                file_path = new_file_path
 
+            if save_as_new_file:
+                # timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
+                # 取上一级目录
+                parent_dir = os.path.dirname(file_path)
+                print(parent_dir)
+                # 在上一级目录下新建文件夹
+                new_dir = os.path.join(parent_dir, f'{parent_dir}_gray')
+                os.makedirs(new_dir, exist_ok=True)
+
+                # 文件名不变，复制到新目录
+                new_file_path = os.path.join(new_dir, os.path.basename(file_path))
+                shutil.copy(file_path, new_file_path)
+
+                print(f"[INFO] 原始文件复制到上一级目录的新文件夹: {new_file_path}")
+
+                file_path = new_file_path  # 更新 file_path 指向新的位置
             with h5py.File(file_path, 'r+') as f:
                 data = self.get_key(file_path)
                 print(data)
@@ -423,8 +445,12 @@ class Modify_hdf5:
                     camera_top_data = f[top][:]
                     camera_right_data = f[right][:]
                     camera_left_data = f[left][:]
-                    qpos = f[qpos_key][:]
-                    actions = f[action_key][:]
+                    if one_arm:
+                        qpos = f[qpos_key][:,:8]
+                        actions = f[action_key][:,:8]
+                    else:
+                        qpos = f[qpos_key][:]
+                        actions = f[action_key][:]
                 # print(qpos)
                 camera_top_data_np = np.array(camera_top_data)
                 camera_right_data_np = np.array(camera_right_data)
@@ -432,7 +458,25 @@ class Modify_hdf5:
                 qpos_np = np.array(qpos)
                 actions_np = np.array(actions)
                 len_ = camera_top_data_np.shape[0]
-                print(camera_top_data_np.shape,camera_right_data_np.shape,camera_left_data_np.shape,qpos_np.shape,actions_np.shape)
+
+                print(qpos_np.shape,qpos_np[:3,:])
+                if gray:
+                    camera_top_data_np_gray = self.gray_image(camera_top_data_np)
+                    camera_right_data_np_gray = self.gray_image(camera_right_data_np)
+                    camera_left_data_np_gray = self.gray_image(camera_left_data_np)
+                    camera_top_data = camera_top_data_np_gray.copy()
+                    camera_right_data = camera_right_data_np_gray.copy()
+                    camera_left_data = camera_left_data_np_gray.copy()
+                # print(camera_top_data_np_gray.shape,camera_right_data_np_gray.shape,camera_left_data_np_gray.shape,qpos_np.shape,actions_np.shape)
+
+                # save_dir = 'gray_images_png'
+                # os.makedirs(save_dir, exist_ok=True)  # 自动创建保存目录
+
+                # # for i in range(gray_images_3ch.shape[0]):
+                # img = camera_top_data_np_gray[0]  # 取出第i张 (480, 640, 3)
+
+                # save_path = os.path.join(save_dir, f'gray_image.png')  # 文件名自动编号
+                # cv2.imwrite(save_path, img)
                 if edit:
                     def decompress_images(compressed_data):
                         image_list = []
@@ -546,7 +590,9 @@ class Modify_hdf5:
                 compress=False,
                 edit=False,
                 exposure_factor=1,
-                save_as_new_file=False  # 不影响原始文件
+                save_as_new_file=False,  # 不影响原始文件
+                gray=False,
+                one_arm=True
                 )
         # self.rename_modified_hdf5_files(dataset_dir,42)
 
@@ -733,6 +779,7 @@ class Modify_hdf5:
             image_path = os.path.join(root_dir, file_stem + ".png")
             
             print(image_path)
+            print(qpos_path_data[70])
             visualize_joints(qpos_path_data, action_path_data, image_path, STATE_NAMES=STATE_NAMES)
 
 
@@ -890,28 +937,30 @@ class Modify_hdf5:
 
 
 if __name__ == '__main__':
-    truncate_ranges = {
-        'top': (0, 558),
-        'action': (0, 558),
-        'right_wrist': (0, 558),
-        'qpos': (0, 558),
-    }
+    # truncate_ranges = {
+    #     'top': (0, 558),
+    #     'action': (0, 558),
+    #     'right_wrist': (0, 558),
+    #     'qpos': (0, 558),
+    # }
     test = Modify_hdf5()
-    # test.batch_modify_hdf5('/workspace/exchange/4-7')
-    test.modify_hdf5(
-        file_path='/workspace/exchange/4-24/episode_1.hdf5', 
-        compress=False,
-        edit=False,
-        exposure_factor=1,
-        save_as_new_file=False,  # 不影响原始文件
-        truncate_ranges=truncate_ranges
-        )
+    # test.batch_modify_hdf5('/workspace/exchange/4-30/hdf5_file_duikong_4-30')
+    # test.modify_hdf5(
+    #     file_path='/workspace/exchange/episode_0.hdf5', 
+    #     compress=False,
+    #     edit=False,
+    #     exposure_factor=1,
+    #     save_as_new_file=False,  # 不影响原始文件
+    #     gray=False,
+    #     one_arm = False,
+    #     # truncate_ranges=truncate_ranges
+    #     )
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # for i in range(32,53):
-    # test.save_arm_video('/workspace/exchange', fps=10, i=0,arm_path='observations/images/left_wrist',exposure_factor = 1)
-    test.save_video('/workspace/exchange/4-24', fps=10, i=1,arm='left_wrist',exposure_factor = 1)
-    test.visual_qpos_action('/workspace/exchange/4-24/episode_0.hdf5')
+    # test.save_arm_video('/workspace/exchange/4-28/hdf5_file_duikong_new', fps=10, i=0,arm_path='observations/images/top',exposure_factor = 1)
+    # test.save_video('/workspace/exchange/4-24', fps=10, i=1,arm='left_wrist',exposure_factor = 1)
+    test.visual_qpos_action('/workspace/exchange/episode_0.hdf5')
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
     # top_image = "camera_top"

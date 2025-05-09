@@ -35,6 +35,8 @@ from tqdm import tqdm
 from deploy.visualize_episodes import visualize_joints
 from tcp_tx import PersistentClient
 import pytz
+complete_sign = 0
+complete_sign_0 = 0
 tz = pytz.timezone('Asia/Shanghai')
 current_time = datetime.datetime.now(tz)
 # datetime.
@@ -443,13 +445,14 @@ class GPCONTROL(threading.Thread):
 
 
 class eval:
-    def __init__(self,camera,persistentClient,gp_contrpl,real_robot=False,data_true=False,ckpt_dir=r'/workspace/exchange/4-24/act',ckpt_name="policy_step_78000_seed_0.ckpt",hdf5_path=r'/workspace/exchange/4-24/hdf5_file_exchange/episode_6.hdf5',state_dim=8):
+    def __init__(self,camera,persistentClient,gp_contrpl,real_robot=False,data_true=False,ckpt_dir=r'/workspace/exchange/4-24/act',ckpt_name="policy_step_78000_seed_0.ckpt",hdf5_path=r'/workspace/exchange/4-24/hdf5_file_exchange/episode_6.hdf5',state_dim=8,temporal_agg=False):
         self.real_robot = real_robot
         self.data_true = data_true
         self.ckpt_dir = ckpt_dir
         self.ckpt_name=ckpt_name
         self.hdf5_path = hdf5_path
-        self.state_dim = 8
+        self.state_dim = state_dim
+        self.temporal_agg = temporal_agg
         if self.real_robot:
             self.camera:CAMERA_HOT_PLUG = camera
             self.persistentClient:PersistentClient = persistentClient
@@ -532,6 +535,7 @@ class eval:
                 return False
         return True
     def main(self):
+        global complete_sign,complete_sign_0
         actions_list = []
         qpos_list_ = []
         loss = []
@@ -539,7 +543,7 @@ class eval:
 
         if self.data_true:
 
-            loop_len = 200
+            loop_len = 100
             task_complete_step = None
             square_size = 100
         else:
@@ -551,7 +555,8 @@ class eval:
             'ckpt_dir': self.ckpt_dir,
             'max_timesteps': loop_len,
             'ckpt_name': self.ckpt_name,
-            'backbone': 'resnet18'
+            'backbone': 'resnet18',
+            'temporal_agg':self.temporal_agg,
         }
         image_dict = {i:[] for i in camera_names}
         # print(image_dict)
@@ -579,6 +584,7 @@ class eval:
 
                     # if self.is_close(self.persistentClient.get_arm_position_joint(1)[:3],[-121.42, -599.741, -209.687]) or i >30:
                     #     task_complete_step = 1
+                    
                     for camera_name in camera_names:
                         # self.image[camera_name] = 
                         image_dict[camera_name] = self.image[camera_name]
@@ -610,7 +616,8 @@ class eval:
                 for camera_name in camera_names:
                     image_dict[camera_name] = np.array(dict_[camera_name][i])
                 radius_qpos = dict_['qpos'][i]
-           
+            # print(np.array(radius_qpos).shape)
+
             self.radius_qpos_list.append(radius_qpos)
             # print(image_dict)
             ActionGeneration.image_dict = image_dict
@@ -629,10 +636,18 @@ class eval:
                 # if right_arm_action[5]>360:
                 #     right_arm_action[5]=358
 
-                if self.is_close(self.persistentClient.get_arm_position_pose(1),[-106.669, -814.076, -287.101, 2.47181, -0.00227704, 1.49762]) and complete_sign == 0:
+                if self.is_close(self.persistentClient.get_arm_position_pose(1),[-105.355, -812.718, -288.649, 2.4762, -0.00283241, 1.48519],0.5) and complete_sign == 0:
                     complete_sign = 1
-                    
+                    print("第一段已到位")
                     break
+                if self.is_close(self.persistentClient.get_arm_position_pose(1),[629.139, -161.7, 590.8, 1.64782, 1.38225, 1.3574],0.5) and complete_sign == 1:
+                    # complete_sign = 1
+                    complete_sign_0 = 1
+                    print("第二段已到位")
+                    if self.is_close(self.persistentClient.get_arm_position_pose(1),[-127.243, -584.915, -238.195, 2.83726, -0.121101, 0.283056],0.5):
+
+                        break
+                # print(f"左手位置：{self.persistentClient.get_arm_position_pose(1)},{complete_sign}")
                 # print(type(right_gp),type(right_arm_action))
                 if right_arm_action.size == 0:
                     pass
@@ -644,7 +659,7 @@ class eval:
                 if right_gp.size == 0:
                     pass
                 else:
-                    print("设置右手")
+                    # print("设置右手")
                     self.gp_contrpl.state_data_2=int(right_gp[0])
             actions_list.append(actions)
             # loss.append((actions - dict_['action'][i]) ** 2)
@@ -654,7 +669,7 @@ class eval:
         image_path = os.path.join(path_save_image, config['backbone']+"_"+ os.path.splitext(config['ckpt_name'])[0]+ ".png")
         loss_apth = os.path.join(path_save_image, 'loss' + current_time.strftime("%m-%d+8-%H-%M") + ".png")
         radius_qpos_list_ = [row[:self.state_dim] for row in self.radius_qpos_list]
-        # print(np.array(radius_qpos_list_).shape, np.array(actions_list).shape)
+        # print(np.array(radius_qpos_list_).shape, np.array(actions_list).shape,self.state_dim)
         visualize_joints(radius_qpos_list_, actions_list, image_path, STATE_NAMES=STATE_NAMES)
         # sys.exit(0)
         # os._exit(0)
@@ -663,10 +678,31 @@ class eval:
 complete_sign = 0
 if __name__ == '__main__':
     camera = CAMERA_HOT_PLUG()
+    
     robot = PersistentClient('192.168.3.15', 8001)
     gpcontrol = GPCONTROL()
     gpcontrol.start()
-    eval(camera=camera,persistentClient=robot,gp_contrpl=gpcontrol,real_robot=True,data_true=True,ckpt_dir=r'/workspace/exchange/4-24/act',ckpt_name='policy_best.ckpt',hdf5_path=r'/workspace/exchange/4-24/hdf5_file_exchange/episode_39.hdf5',state_dim=16)
+    # print(gpcontrol.state)
+    time.sleep(3)
+    eval(camera=camera,
+         persistentClient=robot,
+         gp_contrpl=gpcontrol,
+         real_robot=True,
+         data_true=False,
+         ckpt_dir=r'/workspace/exchange/4-28/hdf5_file_exchange_new/act',ckpt_name='policy_step_54000_seed_0.ckpt',
+         hdf5_path=r'/workspace/exchange/4-28/hdf5_file_exchange_new/episode_18.hdf5',
+         state_dim=16,
+         temporal_agg=True)
     # time.sleep(2)
-    # eval(camera=camera,persistentClient=robot,gp_contrpl=gpcontrol,real_robot=False,data_true=False,ckpt_dir=r'/workspace/exchange/4-25',ckpt_name='policy_best.ckpt',hdf5_path=r'/workspace/exchange/4-24/hdf5_file_duikong/episode_40.hdf5',state_dim=8)
+    print("第二段")
+    eval(camera=camera,
+         persistentClient=robot,
+         gp_contrpl=gpcontrol,
+         real_robot=True,
+         data_true=False,
+         ckpt_dir=r'/workspace/exchange/4-30/hdf5_file_duikong_4-30/act_5_6',
+         ckpt_name='policy_best.ckpt',
+         hdf5_path=r'/workspace/exchange/4-30/hdf5_file_duikong_4-30/episode_8.hdf5',
+         state_dim=8,
+         temporal_agg=True)
     # print("qwekqweqwe")

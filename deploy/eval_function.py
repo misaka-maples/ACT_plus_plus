@@ -575,13 +575,15 @@ class eval:
                     # right_pos=right_gp[1]
                     # right_force = right_gp[2]
                     # print(left_gp)
-                    radius_qpos = [math.radians(j) for j in left_qpos]
+                    # radius_qpos = [math.radians(j) for j in left_qpos]
+                    radius_qpos = left_qpos
                     gpstate, gppos, gpforce = map(lambda x: str(x) if not isinstance(x, str) else x, left_gp)
                     radius_qpos.extend([int(gppos, 16), int(gpforce, 16)])
-                    radius_qpos.extend([math.radians(j) for j in right_qpos])
+                    # radius_qpos.extend([math.radians(j) for j in right_qpos])
+                    radius_qpos.extend(right_qpos)
                     gpstate, gppos, gpforce = map(lambda x: str(x) if not isinstance(x, str) else x, right_gp)
                     radius_qpos.extend([int(gppos, 16), int(gpforce, 16)])
-
+                    # print(radius_qpos)
                     # if self.is_close(self.persistentClient.get_arm_position_joint(1)[:3],[-121.42, -599.741, -209.687]) or i >30:
                     #     task_complete_step = 1
                     
@@ -619,14 +621,17 @@ class eval:
             # print(np.array(radius_qpos).shape)
 
             self.radius_qpos_list.append(radius_qpos)
+            # print(radius_qpos)
             # print(image_dict)
             ActionGeneration.image_dict = image_dict
             ActionGeneration.qpos_list = radius_qpos
             actions = ActionGeneration.get_action()
             # print(qpos)
             # print(list(np.degrees(actions)))
-            left_arm_action = np.rad2deg(actions[:6])
-            right_arm_action= np.rad2deg(actions[8:14])
+            left_arm_action = actions[:6]
+            right_arm_action = actions[8:14]
+            # left_arm_action = np.rad2deg(actions[:6])
+            # right_arm_action= np.rad2deg(actions[8:14])
             left_gp = actions[6:8]
             right_gp = actions[14:16]
             # print(left_gp,right_gp)
@@ -635,16 +640,19 @@ class eval:
             if self.real_robot:
                 # if right_arm_action[5]>360:
                 #     right_arm_action[5]=358
-
-                if self.is_close(self.persistentClient.get_arm_position_pose(1),[-105.355, -812.718, -288.649, 2.4762, -0.00283241, 1.48519],0.5) and complete_sign == 0:
+                if self.is_close(self.persistentClient.get_arm_position_pose(1),[-129.127, -810.615, -288.951, 2.4716, -0.00248988, 2.28385],1) and complete_sign == 0:
                     complete_sign = 1
                     print("第一段已到位")
                     break
-                if self.is_close(self.persistentClient.get_arm_position_pose(1),[629.139, -161.7, 590.8, 1.64782, 1.38225, 1.3574],0.5) and complete_sign == 1:
+                # if self.is_close(self.persistentClient.get_arm_position_joint(1),[-101.05369  , -77.50083 ,   53.14054  ,  14.273354 , -61.44039 ,   19.2856  ],0.5) and complete_sign == 0:
+                #     complete_sign = 1
+                #     print("第一段已到位")
+                #     break
+                if self.is_close(self.persistentClient.get_arm_position_pose(1),[629.137, -161.689, 590.811, 1.6477, 1.38221, 2.1665],0.5) and complete_sign == 1:
                     # complete_sign = 1
                     complete_sign_0 = 1
                     print("第二段已到位")
-                    if self.is_close(self.persistentClient.get_arm_position_pose(1),[-127.243, -584.915, -238.195, 2.83726, -0.121101, 0.283056],0.5):
+                    if self.is_close(self.persistentClient.get_arm_position_joint(1),[-99.9248, -44.9142, 13.987, -5.93674, -49.1103, -33.6326],0.5):
 
                         break
                 # print(f"左手位置：{self.persistentClient.get_arm_position_pose(1)},{complete_sign}")
@@ -689,8 +697,9 @@ if __name__ == '__main__':
          gp_contrpl=gpcontrol,
          real_robot=True,
          data_true=False,
-         ckpt_dir=r'/workspace/exchange/4-28/hdf5_file_exchange_new/act',ckpt_name='policy_step_54000_seed_0.ckpt',
-         hdf5_path=r'/workspace/exchange/4-28/hdf5_file_exchange_new/episode_18.hdf5',
+         ckpt_dir=r'/workspace/exchange/5-9/exchange/act',
+         ckpt_name='policy_step_40000_seed_0.ckpt',
+         hdf5_path=r'/workspace/exchange/5-9/exchange/episode_22.hdf5',
          state_dim=16,
          temporal_agg=True)
     # time.sleep(2)
@@ -700,9 +709,9 @@ if __name__ == '__main__':
          gp_contrpl=gpcontrol,
          real_robot=True,
          data_true=False,
-         ckpt_dir=r'/workspace/exchange/4-30/hdf5_file_duikong_4-30/act_5_6',
+         ckpt_dir=r'/workspace/exchange/5-9/duikong/act',
          ckpt_name='policy_best.ckpt',
-         hdf5_path=r'/workspace/exchange/4-30/hdf5_file_duikong_4-30/episode_8.hdf5',
+         hdf5_path=r'/workspace/exchange/5-9/duikong/episode_23.hdf5',
          state_dim=8,
          temporal_agg=True)
     # print("qwekqweqwe")

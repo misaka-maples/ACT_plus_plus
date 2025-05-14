@@ -451,6 +451,12 @@ class Modify_hdf5:
                     else:
                         qpos = f[qpos_key][:]
                         actions = f[action_key][:]
+                # qpos[:,:6] = np.degrees(qpos[:,:6])
+                # actions[:,:6] = np.degrees(actions[:,:6])
+                # qpos[:,9:14] = np.degrees(qpos[:,8:14])
+                # actions[:,9:14] = np.degrees(actions[:,8:14])
+                qpos[:,8] = np.deg2rad(qpos[:,8])
+                actions[:,8] = np.deg2rad(actions[:,8])
                 # print(qpos)
                 camera_top_data_np = np.array(camera_top_data)
                 camera_right_data_np = np.array(camera_right_data)
@@ -459,7 +465,7 @@ class Modify_hdf5:
                 actions_np = np.array(actions)
                 len_ = camera_top_data_np.shape[0]
 
-                print(qpos_np.shape,qpos_np[:3,:])
+                # print(qpos_np.shape,qpos_np[:3,:])
                 if gray:
                     camera_top_data_np_gray = self.gray_image(camera_top_data_np)
                     camera_right_data_np_gray = self.gray_image(camera_right_data_np)
@@ -592,7 +598,7 @@ class Modify_hdf5:
                 exposure_factor=1,
                 save_as_new_file=False,  # 不影响原始文件
                 gray=False,
-                one_arm=True
+                one_arm=False
                 )
         # self.rename_modified_hdf5_files(dataset_dir,42)
 
@@ -944,7 +950,7 @@ if __name__ == '__main__':
     #     'qpos': (0, 558),
     # }
     test = Modify_hdf5()
-    # test.batch_modify_hdf5('/workspace/exchange/4-30/hdf5_file_duikong_4-30')
+    # test.batch_modify_hdf5('/workspace/exchange/5-9/temp')
     # test.modify_hdf5(
     #     file_path='/workspace/exchange/episode_0.hdf5', 
     #     compress=False,
@@ -960,7 +966,7 @@ if __name__ == '__main__':
     # for i in range(32,53):
     # test.save_arm_video('/workspace/exchange/4-28/hdf5_file_duikong_new', fps=10, i=0,arm_path='observations/images/top',exposure_factor = 1)
     # test.save_video('/workspace/exchange/4-24', fps=10, i=1,arm='left_wrist',exposure_factor = 1)
-    test.visual_qpos_action('/workspace/exchange/episode_0.hdf5')
+    test.visual_qpos_action('/workspace/exchange/5-9/exchange/episode_15.hdf5')
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
     # top_image = "camera_top"

@@ -527,13 +527,13 @@ class eval:
             square_size = 100
         else:
             data_dict = Modify_hdf5()
-            dict_ = data_dict.check_hdf5(r'/workspace/exchange/4-28/hdf5_file_exchange_new/episode_18.hdf5')
+            dict_ = data_dict.check_hdf5(r'/workspace/exchange/5-9/exchange/episode_10.hdf5')
             # print(dict_["action"].shape)
             loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/4-28/hdf5_file_exchange_new/act',
+            'ckpt_dir': r'/workspace/exchange/5-9/exchange/act',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_step_54000_seed_0.ckpt",
+            'ckpt_name': "policy_step_30000_seed_0.ckpt",
             'backbone': 'resnet18',
             'temporal_agg':True,
         }

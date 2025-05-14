@@ -291,21 +291,23 @@ if __name__ == "__main__":
                     print(joint_pose,pose)
                     time.sleep(0.1)
             if message == "1,2":
-                deta = client.get_arm_position_pose(2)#[191.699, -68.037, 585.006, 1.08749, 1.40397, 1.99036]
+                deta = client.get_arm_position_pose(1)#[191.699, -68.037, 585.006, 1.08749, 1.40397, 1.99036]
                 print(deta)
             if message =="1,3":
                 # client.set_close(1)
                 # time.sleep(1)
                 # client.set_clear(1)
                 # client.set_open(1) [-133.111, -603.627, -349.451, 2.41829, 0.0258569, 0.0772928]
-                client.set_arm_position([-120.944, -814.89, -286.436, 2.47177, -0.00227574, 1.49761],"pose",1)
+                client.set_arm_position([-128.926, -810.452, -288.164, 2.47379, -0.00184066, 2.27175],"pose",1)
+            if message =="111":
+                client.set_arm_position([-118.127, -815, -288.951, 2.4716, -0.00248988, 2.28385],"pose",1)
             if message == "1,4":
-                client.set_arm_position( [-126.106, -676.665, -177.715, 2.52124, -0.176581, 0.523211],"pose",1)
+                client.set_arm_position( [-109.0, -811.015, -288.718, 2.47157, -0.00245327, 2.28383],"pose",1)
             if message == "1":
                 client.set_speed(1,30)
                 client.set_speed(2,30)
             if message == "2":
-                client.set_arm_position( [-127.243, -584.915, -238.195, 2.83726, -0.121101, 0.283056],"pose",1)
+                client.set_arm_position([-127.205, -584.918, -238.196, 2.8373, -0.121059, 1.07089],"pose",1)
                 # client.set_arm_position([-135.806, -657.58, -132.078, 2.35454, 0.0848985, 1.51967],"pose",1)
                 # client.set_arm_position( [-81.1963, -580.862, 115.466, 2.73102, -0.00482064, 2.98929],"pose",1)
                 # client.set_arm_position( [-103.907, -629.442, -42.2999, 2.50661, -0.00864752, 3.0262],"pose",1)

@@ -298,7 +298,7 @@ if __name__ == "__main__":
                 # time.sleep(1)
                 # client.set_clear(1)
                 # client.set_open(1) [-133.111, -603.627, -349.451, 2.41829, 0.0258569, 0.0772928]
-                client.set_arm_position([-128.926, -810.452, -288.164, 2.47379, -0.00184066, 2.27175],"pose",1)
+                client.set_arm_position([-125.926, -810.452, -288.164, 2.47379, -0.00184066, 2.27175],"pose",1)
             if message =="111":
                 client.set_arm_position([-118.127, -815, -288.951, 2.4716, -0.00248988, 2.28385],"pose",1)
             if message == "1,4":

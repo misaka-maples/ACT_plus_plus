@@ -531,9 +531,9 @@ class eval:
             # print(dict_["action"].shape)
             loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/5-9/exchange/act',
+            'ckpt_dir': r'/workspace/exchange/5-9/exchange/ACT',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_step_30000_seed_0.ckpt",
+            'ckpt_name': "policy_step_1000_seed_0.ckpt",
             'backbone': 'resnet18',
             'temporal_agg':True,
         }

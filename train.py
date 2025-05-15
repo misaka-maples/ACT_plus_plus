@@ -12,7 +12,7 @@ from utils import load_data  # data functions
 from utils import compute_dict_mean, set_seed, detach_dict, calibrate_linear_vel, postprocess_base_action  # helper functions
 # if False:
 from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy,HITPolicy
-from policy_origin import ACTPolicy,CNNMLPPolicy,DiffusionPolicy
+# from policy_origin import ACTPolicy,CNNMLPPolicy,DiffusionPolicy
 from visualize_episodes import save_videos
 import wandb
 # 限制 PyTorch 只能看到 GPU 1
@@ -30,10 +30,10 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/5-9/exchange/act",#ckpt保存路径
+            'ckpt_dir': "/workspace/exchange/5-9/exchange/Diffusion",#ckpt保存路径
             'dataset_dir':"/workspace/exchange/5-9/exchange",#数据集路径
-            'model_type':'ACT',
-            'policy_class': 'ACT',
+            'model_type':'Diffusion',
+            'policy_class': 'Diffusion',
             'task_name': 'train',
             'batch_size': 8,
             'seed': 0,
@@ -78,7 +78,12 @@ class Train:
             'qpos_noise_std': 0,
             'train_ratio':0.87,
             'context_len': 946-45,
-            'device': torch.device("cuda" if torch.cuda.is_available() else "cpu")  
+            'device': torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+            'observation_horizon':16,
+            'action_horizon':16,
+            'prediction_horizon':45,
+            'num_inference_timesteps':80000,
+            'ema_power':2/3,
         }
  
     def main(self):

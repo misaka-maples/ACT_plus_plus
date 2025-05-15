@@ -18,7 +18,7 @@ from pathlib import Path
 root_path = Path(__file__).resolve().parent.parent
 sys.path.append(str(root_path))
 # from policy_origin import ACTPolicy
-from policy import HITPolicy,ACTPolicy
+from train import HITPolicy,ACTPolicy,DiffusionPolicy
 from policy_origin import ACTPolicy
 import torch
 import pickle
@@ -94,6 +94,8 @@ class ActionGenerator:
             policy = ACTPolicy(self.config_data)
         elif self.config_data['policy_class']=='HIT':
             policy = HITPolicy(self.config_data)
+        elif self.config_data['policy_class']=='Diffusion':
+            policy = DiffusionPolicy(self.config_data)
         policy.deserialize(torch.load(ckpt_path, weights_only=True))
         policy.cuda()
         policy.eval()

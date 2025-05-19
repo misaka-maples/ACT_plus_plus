@@ -158,53 +158,30 @@ class PersistentClient:
                 return False
         return True
 
-    def set_arm_position(self, value:list, model:str,robotnum:str, timeout=5):
-        """
-        设置机械臂位置（关节模式或位姿模式），阻塞直到收到完成信号
-
-        :param value: 目标位置列表（关节角或位姿坐标）
-        :param model: 模式选择，可选 "joint"（关节） 或 "pose"（位姿）
-        :param timeout: 超时时间（秒）
-        :return: 成功返回True，超时或失败返回False
-        """
-        # 参数校验
-        if not isinstance(value, list) or len(value) != 6:
-            print("[ERROR] 输入必须是包含6个数值的列表")
+    def set_arm_position(self, value: list, model: str, robotnum: int, vel=100, acc=100, dcc=100, timeout=2):
+        # 构造命令
+        value_str = ",".join(f"{x:.4f}" for x in value)
+        cmd_type = "ACS" if model == "joint" else "PCS"
+        command = f"set,{robotnum},{vel},{cmd_type},0,0,{value_str},0,{acc},{dcc}"
+        # 发送命令
+        if not self.send_message(command):
             return False
-        # print(f"id:{robotnum}")
-        if model not in ["joint", "pose"]:
-            print("[ERROR] 模式参数必须是 'joint' 或 'pose'")
-            return False
-        # print("进入近似点判断")
-        if self.is_close(self.get_arm_position_pose(robotnum),value):
-            print('[INFO] 当前位置与目标位置相等')
-            return False
-        try:
-            # 构造命令字符串
-            value_str = ",".join(f"{x:.4f}" for x in value)
-            cmd_type = "ACS" if model == "joint" else "PCS"
-            command = f"set,{robotnum},{self.vel},{cmd_type},0,0,{value_str},0,{self.acc},{self.dcc}"
-
-            # 发送命令
-            if not self.send_message(command):
+        
+        start_time = time.time()
+        finsh = 0
+        while finsh <= 0:
+            data = self._receive_data(robotnum)
+            t = time.time() - start_time
+            if data is None:  # 超时
+                print("[TCP_WARNING] 数据为None")
                 return False
-            # finsh = 0
-            # print(f"发送数据：{command}")
-            # 阻塞等待响应
-            while True:
-                # 读取接收数据（假设有非阻塞读取方法）
-                data = self._receive_data(robotnum)
-                # print(f"接收数据:{data}")
-                # time.sleep(0.01)
-                # print(f'wating data')
-                if "readyToNext" in data:  # 根据实际的返回数据格式修改
-                    
-                    # print(f"data:{data}")
-                    break
-        except Exception as e:
-            print(f"[ERROR] 设置位置失败: {e}")
-            return False
-
+            if "readyToNext" in data:
+                finsh = 1
+                return True
+            if t > timeout:
+                finsh = 1
+                print("[TCP_WARNING] 等待 'readyToNext' 超时")
+                return False
     def get_arm_position_joint(self,robotnum):
             """
             获取机械臂位姿：

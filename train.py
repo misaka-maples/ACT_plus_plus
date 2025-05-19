@@ -30,10 +30,10 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/5-9/exchange/Diffusion",#ckpt保存路径
+            'ckpt_dir': "/workspace/exchange/5-9/exchange/act_test",#ckpt保存路径
             'dataset_dir':"/workspace/exchange/5-9/exchange",#数据集路径
-            'model_type':'Diffusion',
-            'policy_class': 'Diffusion',
+            'model_type':'ACT',
+            'policy_class': 'ACT',
             'task_name': 'train',
             'batch_size': 8,
             'seed': 0,

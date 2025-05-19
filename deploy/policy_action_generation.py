@@ -19,7 +19,7 @@ root_path = Path(__file__).resolve().parent.parent
 sys.path.append(str(root_path))
 # from policy_origin import ACTPolicy
 from train import HITPolicy,ACTPolicy,DiffusionPolicy
-from policy_origin import ACTPolicy
+# from policy_origin import ACTPolicy
 import torch
 import pickle
 import argparse

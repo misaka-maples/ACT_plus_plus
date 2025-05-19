@@ -170,6 +170,7 @@ class DiffusionPolicy(nn.Module):
                 all_features.append(out_features)
 
             obs_cond = torch.cat(all_features + [qpos], dim=1)
+            print("obs_cond shape:", obs_cond.shape)
 
             # sample noise to add to actions
             noise = torch.randn(actions.shape, device=obs_cond.device)

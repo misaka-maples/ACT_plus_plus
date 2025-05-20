@@ -6,8 +6,6 @@ from pyorbbecsdk import *
 import numpy as np
 from queue import Queue
 import cv2
-from typing import Union, Any, Optional
-
 # 获取当前脚本的路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -16,49 +14,16 @@ parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
 
 # 添加到 sys.path
 sys.path.append(parent_dir)
-config_file_path = os.path.join(os.path.dirname(__file__), "/workspace/config/multi_device_sync_config.json")
-# from utils import frame_to_bgr_image
+config_file_path = os.path.join(os.path.dirname(__file__), "../config/multi_device_sync_config.json")
+from utils import frame_to_bgr_image
 
 multi_device_sync_config = {}
 
 MAX_DEVICES = 5  # 假设最多支持 5 台设备
-MAX_QUEUE_SIZE = 1  # 最大帧队列长度
+MAX_QUEUE_SIZE = 10  # 最大帧队列长度
 
-def frame_to_bgr_image(frame: VideoFrame) -> Union[Optional[np.array], Any]:
-    width = frame.get_width()
-    height = frame.get_height()
-    color_format = frame.get_format()
-    data = np.asanyarray(frame.get_data())
-    image = np.zeros((height, width, 3), dtype=np.uint8)
-    if color_format == OBFormat.RGB:
-        image = np.resize(data, (height, width, 3))
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    elif color_format == OBFormat.BGR:
-        image = np.resize(data, (height, width, 3))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    elif color_format == OBFormat.YUYV:
-        image = np.resize(data, (height, width, 2))
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_YUYV)
-    elif color_format == OBFormat.MJPG:
-        image = cv2.imdecode(data, cv2.IMREAD_COLOR)
-    # elif color_format == OBFormat.I420:
-    #     image = i420_to_bgr(data, width, height)
-    #     return image
-    # elif color_format == OBFormat.NV12:
-    #     image = nv12_to_bgr(data, width, height)
-    #     return image
-    # elif color_format == OBFormat.NV21:
-    #     image = nv21_to_bgr(data, width, height)
-    #     return image
-    elif color_format == OBFormat.UYVY:
-        image = np.resize(data, (height, width, 2))
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_UYVY)
-    else:
-        print("Unsupported color format: {}".format(color_format))
-        return None
-    return image
 class CAMERA_HOT_PLUG:
-    def __init__(self,resolution=[640,480],fps=30):
+    def __init__(self):
         self.mutex = threading.Lock()
         self.ctx = Context()
         self.device_list = self.ctx.query_devices()
@@ -68,16 +33,12 @@ class CAMERA_HOT_PLUG:
         self.serial_number_list: list[str] = ["" for _ in range(self.curr_device_cnt)]
         self.color_frames_queue: dict[str, Queue] = {}
         self.depth_frames_queue: dict[str, Queue] = {}
-        self.reolution = resolution
-        self.fps = fps
-        self.color_profile = object
-        self.depth_profile = object
         # self.temporal_filter = TemporalFilter(alpha=0.5)  # Modify alpha based on desired smoothness
 
         self.setup_cameras()
         self.start_streams()
         print("相机初始化完成")
-        self.multi_device_sync_config = multi_device_sync_config
+
         # 监控设备线程
         self.monitor_thread = threading.Thread(target=self.monitor_devices, daemon=True)
         self.monitor_thread.start()
@@ -121,7 +82,6 @@ class CAMERA_HOT_PLUG:
 
             # 读取同步配置
             sync_config_json = multi_device_sync_config.get(serial_number, {})
-            # print(serial_number,sync_config_json,multi_device_sync_config['serial_number'])
             sync_config = device.get_multi_device_sync_config()
             sync_config.mode = self.sync_mode_from_str(sync_config_json["config"]["mode"])
             sync_config.color_delay_us = sync_config_json["config"]["color_delay_us"]
@@ -132,15 +92,13 @@ class CAMERA_HOT_PLUG:
             device.set_multi_device_sync_config(sync_config)
 
             try:
-                profile_list: StreamProfileList = pipeline.get_stream_profile_list(OBSensorType.COLOR_SENSOR)
-                # color_profile = profile_list.get_default_video_stream_profile()
-                self.color_profile:StreamProfile = profile_list.get_video_stream_profile(self.reolution[0],self.reolution[1],OBFormat.RGB,self.fps)
-                config.enable_stream(self.color_profile)
+                profile_list = pipeline.get_stream_profile_list(OBSensorType.COLOR_SENSOR)
+                color_profile = profile_list.get_default_video_stream_profile()
+                config.enable_stream(color_profile)
 
                 profile_list = pipeline.get_stream_profile_list(OBSensorType.DEPTH_SENSOR)
-                # depth_profile = profile_list.get_default_video_stream_profile()
-                self.depth_profile:StreamProfile = profile_list.get_video_stream_profile(self.reolution[0],self.reolution[1],OBFormat.Y16,self.fps)
-                config.enable_stream(self.depth_profile)
+                depth_profile = profile_list.get_default_video_stream_profile()
+                config.enable_stream(depth_profile)
 
                 self.pipelines.append(pipeline)
                 self.configs.append(config)
@@ -182,8 +140,6 @@ class CAMERA_HOT_PLUG:
             depth_frame = frames.get_depth_frame()
             if not color_frame or not depth_frame:
                 return None
-            if type(frames).__name__ == "Frame":
-                frames = frames.as_frame_set()
             frames = self.align_filter.process(frames)
             color_frame = frames.get_color_frame()
             depth_frame = frames.get_depth_frame()
@@ -224,8 +180,7 @@ class CAMERA_HOT_PLUG:
                     depth_frame = self.depth_frames_queue[serial_number].get()
                 if depth_frame is None:
                     continue
-
-                depth_data = np.frombuffer(np.ascontiguousarray(depth_frame.get_data()), dtype=np.uint16).reshape(
+                depth_data = np.frombuffer(depth_frame.get_data(), dtype=np.uint16).reshape(
                     (depth_frame.get_height(), depth_frame.get_width()))
                 depth_data = depth_data.astype(np.float32) * depth_frame.get_depth_scale()
 
@@ -235,10 +190,10 @@ class CAMERA_HOT_PLUG:
                 # print("depth_image.shape:", depth_image.shape)
                 depth_image_dict[serial_number] = depth_data
                 # depth_image = cv2.addWeighted(color_image, 0.5, depth_image, 0.5, 0)
-                # if serial_number == 'CP1L44P0004Y':
-                #     cv2.imwrite("color.png",color_image)
-                #     # cv2.imwrite("depth.png", depth_image)
-                #     np.save("depth.npy",depth_data)
+                if serial_number == 'CP1L44P0004Y':
+                    cv2.imwrite("color.png",color_image)
+                    # cv2.imwrite("depth.png", depth_image)
+                    np.save("depth.npy",depth_data)
                 # image_dict[serial_number] = depth_image
 
         return color_image_dict,depth_image_dict,color_width, color_height
@@ -265,32 +220,17 @@ class CAMERA_HOT_PLUG:
         with open(config_file, "r") as f:
             config = json.load(f)
         for device in config["devices"]:
-            multi_device_sync_config[device['serial_number']] = device
+            multi_device_sync_config[device["serial_number"]] = device
             print(f"📷 Device {device['serial_number']}: {device['config']['mode']}")
 
-    def get_color_intrinsic_matrix(self):
-        arg:np.array = np.eye(3)
-        intrinsic:OBCameraIntrinsic = self.color_profile.get_intrinsic()
-        arg[0,0]=intrinsic.fx
-        arg[1,1]=intrinsic.fy
-        arg[0,2]=intrinsic.cx
-        arg[1,2]=intrinsic.cy
-        return arg
+
 if __name__ == "__main__":
-    camera = CAMERA_HOT_PLUG(fps=30)
+    camera = CAMERA_HOT_PLUG()
     right_camera_sn = 'CP1L44P0006E'
-    print(camera.multi_device_sync_config)
-    # time.sleep(1)
-#     [[612.32965088   0.         643.00286865]
-#  [  0.         612.49316406 360.31613159]
-#  [  0.           0.           1.        ]]
+    
     while True:
         color_image_dict,depth_image_dict,color_width, color_height = camera.get_images()
-        color_image_dict_np = np.array(color_image_dict[right_camera_sn],dtype=np.uint8)
+        color_image_dict_np = np.array(color_image_dict[right_camera_sn],dtype=object)
         print(color_image_dict_np.shape)
-        # cv2.imwrite("color.png",color_image_dict_np)
-        # cv2.imshow("color.png",color_image_dict_np)
-        depth_image_dict_np = np.array(depth_image_dict[right_camera_sn],dtype=np.uint8)
+        depth_image_dict_np = np.array(depth_image_dict[right_camera_sn],dtype=object)
         print(depth_image_dict_np.shape)
-        # arg = camera.get_color_intrinsic_matrix()
-        # print(arg)

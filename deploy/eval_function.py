@@ -19,7 +19,8 @@ import cv2
 from queue import Queue
 from pyorbbecsdk import *
 from utils import frame_to_bgr_image
-
+from camera_hot_plug import CAMERA_HOT_PLUG
+from gpcontrol import GPCONTROL
 MAX_DEVICES = 5  # 假设最多支持 5 台设备
 MAX_QUEUE_SIZE = 10  # 最大帧队列长度
 multi_device_sync_config = {}
@@ -43,406 +44,6 @@ current_time = datetime.datetime.now(tz)
 JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
 STATE_NAMES = JOINT_NAMES +["gripper_pos"]+ ["gripper_force"]
 camera_names = ['top', 'right_wrist','left_wrist']
-# from camera_hot_plug import CAMERA_HOT_PLUG
-class CAMERA_HOT_PLUG:
-    def __init__(self):
-        self.mutex = threading.Lock()
-        self.ctx = Context()
-        self.device_list = self.ctx.query_devices()
-        self.curr_device_cnt = self.device_list.get_count()
-        self.pipelines: list[Pipeline] = []
-        self.configs: list[Config] = []
-        self.serial_number_list: list[str] = ["" for _ in range(self.curr_device_cnt)]
-        self.color_frames_queue: dict[str, Queue] = {}
-        self.depth_frames_queue: dict[str, Queue] = {}
-
-        self.setup_cameras()
-        self.start_streams()
-        print("相机初始化完成")
-
-        # 监控设备线程
-        self.monitor_thread = threading.Thread(target=self.monitor_devices, daemon=True)
-        self.monitor_thread.start()
-
-    def monitor_devices(self):
-        """定期检查相机连接状态"""
-        while True:
-            time.sleep(2)
-            new_device_list = self.ctx.query_devices()
-            new_device_cnt = new_device_list.get_count()
-
-            if new_device_cnt != self.curr_device_cnt:
-                print("设备变化检测到，重新初始化相机...")
-                self.stop_streams()
-                self.device_list = new_device_list
-                self.curr_device_cnt = new_device_cnt
-                self.setup_cameras()
-                self.start_streams()
-
-    def setup_cameras(self):
-        """初始化相机设备"""
-        self.read_config(config_file_path)
-
-        if self.curr_device_cnt == 0:
-            print("⚠️ No device connected")
-            return
-        if self.curr_device_cnt > MAX_DEVICES:
-            print("⚠️ Too many devices connected")
-            return
-
-        for i in range(self.curr_device_cnt):
-            device = self.device_list.get_device_by_index(i)
-            serial_number = device.get_device_info().get_serial_number()
-
-            self.color_frames_queue[serial_number] = Queue()
-            self.depth_frames_queue[serial_number] = Queue()
-            pipeline = Pipeline(device)
-            config = Config()
-
-            # 读取同步配置
-            sync_config_json = multi_device_sync_config.get(serial_number, {})
-            sync_config = device.get_multi_device_sync_config()
-            sync_config.mode = self.sync_mode_from_str(sync_config_json["config"]["mode"])
-            sync_config.color_delay_us = sync_config_json["config"]["color_delay_us"]
-            sync_config.depth_delay_us = sync_config_json["config"]["depth_delay_us"]
-            sync_config.trigger_out_enable = sync_config_json["config"]["trigger_out_enable"]
-            sync_config.trigger_out_delay_us = sync_config_json["config"]["trigger_out_delay_us"]
-            sync_config.frames_per_trigger = sync_config_json["config"]["frames_per_trigger"]
-            device.set_multi_device_sync_config(sync_config)
-
-            try:
-                profile_list = pipeline.get_stream_profile_list(OBSensorType.COLOR_SENSOR)
-                color_profile = profile_list.get_default_video_stream_profile()
-                config.enable_stream(color_profile)
-
-                profile_list = pipeline.get_stream_profile_list(OBSensorType.DEPTH_SENSOR)
-                depth_profile = profile_list.get_default_video_stream_profile()
-                config.enable_stream(depth_profile)
-
-                self.pipelines.append(pipeline)
-                self.configs.append(config)
-                self.serial_number_list[i] = serial_number
-            except OBError as e:
-                print(f"setup_cameras error: {e}")
-
-    def start_streams(self):
-        """启动相机流"""
-        print(self.serial_number_list)
-        for index, (pipeline, config, serial) in enumerate(zip(self.pipelines, self.configs, self.serial_number_list)):
-            pipeline.start(
-                config,
-                lambda frame_set, curr_serial=serial: self.on_new_frame_callback(frame_set, curr_serial),
-            )
-
-    def stop_streams(self):
-        """停止相机流"""
-        with self.mutex:
-            try:
-                for pipeline in self.pipelines:
-                    pipeline.stop()
-                self.pipelines = []
-                self.configs = []
-                print("📷 Devices stopped")
-            except Exception as e:
-                print(f"⚠️ Error stopping streams: {e}")
-
-    def on_new_frame_callback(self, frames: FrameSet, serial_number: str):
-        """接收新帧并存入队列"""
-        with self.mutex:
-            if serial_number not in self.color_frames_queue:
-                print(f"⚠️ WARN: 未识别的相机序列号 {serial_number}，跳过帧处理")
-                return
-
-            color_frame = frames.get_color_frame()
-            depth_frame = frames.get_depth_frame()
-
-            if color_frame:
-                if self.color_frames_queue[serial_number].qsize() >= MAX_QUEUE_SIZE:
-                    self.color_frames_queue[serial_number].get()
-                self.color_frames_queue[serial_number].put(color_frame)
-
-            if depth_frame:
-                if self.depth_frames_queue[serial_number].qsize() >= MAX_QUEUE_SIZE:
-                    self.depth_frames_queue[serial_number].get()
-                self.depth_frames_queue[serial_number].put(depth_frame)
-
-    def rendering_frame(self, max_wait=5):
-        image_dict: dict[str, np.ndarray] = {}
-        start_time = time.time()
-        color_width, color_height = None, None
-        while len(image_dict) != self.curr_device_cnt:
-            if time.time() - start_time > max_wait:
-                print("⚠️ WARN: 渲染超时，部分相机未收到帧数据")
-                break
-            for serial_number in self.color_frames_queue.keys():
-                color_frame = None
-                if not self.color_frames_queue[serial_number].empty():
-                    color_frame = self.color_frames_queue[serial_number].get()
-                if color_frame is None:
-                    continue
-                color_width, color_height = color_frame.get_width(), color_frame.get_height()
-                color_image = frame_to_bgr_image(color_frame)
-                image_dict[serial_number] = color_image
-
-        return image_dict,color_width, color_height
-
-    def sync_mode_from_str(self, sync_mode_str: str) -> OBMultiDeviceSyncMode:
-        """将字符串转换为同步模式"""
-        sync_mode_str = sync_mode_str.upper()
-        sync_modes = {
-            "FREE_RUN": OBMultiDeviceSyncMode.FREE_RUN,
-            "STANDALONE": OBMultiDeviceSyncMode.STANDALONE,
-            "PRIMARY": OBMultiDeviceSyncMode.PRIMARY,
-            "SECONDARY": OBMultiDeviceSyncMode.SECONDARY,
-            "SECONDARY_SYNCED": OBMultiDeviceSyncMode.SECONDARY_SYNCED,
-            "SOFTWARE_TRIGGERING": OBMultiDeviceSyncMode.SOFTWARE_TRIGGERING,
-            "HARDWARE_TRIGGERING": OBMultiDeviceSyncMode.HARDWARE_TRIGGERING,
-        }
-        return sync_modes.get(sync_mode_str, OBMultiDeviceSyncMode.FREE_RUN)
-
-    def read_config(self, config_file: str):
-        """读取配置文件"""
-        global multi_device_sync_config
-        with open(config_file, "r") as f:
-            config = json.load(f)
-        for device in config["devices"]:
-            multi_device_sync_config[device["serial_number"]] = device
-            print(f"📷 Device {device['serial_number']}: {device['config']['mode']}")
-
-
-class GPCONTROL(threading.Thread):
-    def __init__(self, DEFAULT_SERIAL_PORTS=("/dev/ttyACM0", "/dev/ttyACM1", "/dev/ttyACM2")):
-        super().__init__()
-        self.state_flag = 128
-        self.running = True
-        self.control_command = ""
-        self.DEFAULT_SERIAL_PORTS = DEFAULT_SERIAL_PORTS
-        self.BAUD_RATE = 50000
-        self.id = 1
-        self.min_data = b'\x00\x00\xFF\xFF\xFF\xFF\x00\x00'
-        self.max_data = b'\x00\xFF\xFF\xFF\xFF\xFF\x00\x00'
-        self.ser = self.open_serial()
-        self.is_sending = False
-        self.state_data_1 = 128
-        self.state_data_2 = 0
-        self.task_complete = False
-        self.is_configured = False
-        self.state = ()
-        # 初始化CAN设置
-        self.send_data(b'\x49\x3B\x42\x57\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x45\x2E')
-        self.send_data(b'\x49\x3B\x42\x57\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x45\x2E')
-        self.read_data()
-        self.send_data(b'\x49\x3B\x44\x57\x01\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x45\x2E')
-        self.read_data()
-
-    def run(self):
-        while self.running:
-
-            # print(f"self.state_data_1:{self.state_data_1}\n,self.state_data_2:{self.state_data_2}")
-            if self.state_data_1<0:
-                self.state_data_1=0
-            if self.state_data_2<0:
-                self.state_data_2=0
-            state_1 = self.set_gp_state(self.state_data_1, can_id=0)
-            state_2 = self.set_gp_state(self.state_data_2, can_id=1)
-            self.state = [state_1,state_2]
-            time.sleep(0.2)
-    def open(self):
-        self.state_data_2=255
-    def close_(self):
-        self.state_data_2=0
-    def stop(self):
-        self.running = False
-        print("[INFO] Gripper thread stopping...")
-
-    def open_serial(self):
-        for port in self.DEFAULT_SERIAL_PORTS:
-            try:
-                ser = serial.Serial(port, self.BAUD_RATE, timeout=1)
-                print(f"串口 {port} 已打开，波特率 {self.BAUD_RATE}")
-                return ser
-            except Exception as e:
-                print(f"无法打开串口 {port}: {e}")
-        print(f"无法打开任何串口: {', '.join(self.DEFAULT_SERIAL_PORTS)}")
-
-    def set_state_flag(self,value,id):
-        """修改 self.state_flag"""
-        self.state_data_1 = value[0]
-        self.state_data_2 = value[1]
-        self.id = id
-
-    def send_data(self, data):
-        """发送数据到串口"""
-        ser=self.ser
-        if ser and ser.is_open:
-            ser.write(data)
-            # print(f"发送数据: {data.hex()}")
-        else:
-            print("串口未打开，无法发送数据")
-
-
-    def filter_can_data(self, data):
-        """根据头（0x5A）和尾（0xA5）过滤数据"""
-        valid_frames = []
-
-        # 查找所有以 0x5A 开头并以 0xA5 结尾的数据帧
-        start_idx = 0
-        while start_idx < len(data):
-            # 查找下一个0x5A
-            start_idx = data.find(b'\x5A', start_idx)
-            if start_idx == -1:  # 如果找不到0x5A，退出循环
-                break
-
-            # 查找下一个0xA5
-            end_idx = data.find(b'\xA5', start_idx)
-            if end_idx == -1:  # 如果找不到0xA5，退出循环
-                break
-
-            # 提取有效数据帧（包括0x5A和0xA5）
-            frame = data[start_idx:end_idx + 1]
-
-            # 确保数据帧长度合理（至少 8 字节）
-            if len(frame) >= 8:
-                valid_frames.append(frame)
-
-            # 设置起始索引，继续查找下一个帧
-            start_idx = end_idx + 1
-        return valid_frames
-
-    def read_data(self):
-        """读取串口返回数据并过滤符合头尾要求的数据"""
-        ser = self.ser
-        if ser and ser.is_open:
-            data = ser.read(32)  # 读取最大 64 字节
-            if data:
-                valid_frames = self.filter_can_data(data)
-                if valid_frames:
-                    back_data=0
-                    for frame in valid_frames:
-                        if frame[:2].hex()=='5aff':
-                            # print("")
-                            continue
-                        else:
-                            # print(f"接收符合条件的CAN数据: {frame.hex()}")
-                            back_data=frame.hex()
-                    return valid_frames, back_data
-                else:
-                    pass
-            else:
-                print("未收到数据")
-        else:
-            print("串口未打开，无法读取数据")
-        return None
-    def send_can_data(self, can_id, data, channel):
-        """
-        发送 CAN 数据帧
-        :param ser: 串口对象
-        :param can_id: 4字节 CAN ID
-        :param data: 发送数据，最大 64 字节
-        """
-        can_id_bytes = can_id  # CAN ID 转换成 4字节
-
-        data_length = len(data)
-        if data_length > 64:
-            data = data[:64]  # 限制数据长度为 64 字节
-        channel = channel & 0x01  # 确保 channel 只有1位
-        frame_header = b'\x5A'  # 帧头
-        frame_info_1 = (data_length | channel << 7).to_bytes(1, 'big')  # CAN通道0, DLC数据长度
-        frame_info_2 = b'\x00'  # 发送类型: 正常发送, 标准帧, 数据帧, 不加速
-        frame_data = data.ljust(64, b'\x00')  # 数据填充到 64 字节
-        frame_end = b'\xA5'  # 帧尾
-
-        send_frame = frame_header + frame_info_1 + frame_info_2 + can_id_bytes + frame_data[:data_length] + frame_end
-        # print("发送 CAN 帧:", send_frame.hex())
-        self.send_data(send_frame)
-        # _,data = self.read_data()
-        # return data
-    def open_half_gp(self):
-        half_open_gp = b'\x00\x7f\xFF\xFF\xFF\xFF\x00\x00'
-        while 1:
-            self.send_can_data(b'\x00\x00\x00\x01', half_open_gp, 0x01)
-            data = self.read_data() 
-            if data is not None:
-                _, gpdata = data
-                while gpdata == 0:
-                    self.send_can_data(b'\x00\x00\x00\x01', half_open_gp, 0x01)
-                    data = self.read_data()
-                    if data is not None:
-                        _, gpdata = data
-                gpstate,gppos,gpforce = gpdata[16:18],gpdata[18:20],gpdata[22:24]
-                return [gpstate,gppos,gpforce]
-        
-    def open_all_gp(self):
-        self.state_data_2=255
-        open_gp = b'\x00\xff\xFF\xFF\xFF\xFF\x00\x00'
-        while 1:
-            self.send_can_data(b'\x00\x00\x00\x01', open_gp, 0x01)
-            data = self.read_data() 
-            if data is not None:
-                _, gpdata = data
-                while gpdata == 0:
-                    self.send_can_data(b'\x00\x00\x00\x01', open_gp, 0x01)
-                    data = self.read_data()
-                    if data is not None:
-                        _, gpdata = data
-                gpstate,gppos,gpforce = gpdata[16:18],gpdata[18:20],gpdata[22:24]
-                return [gpstate,gppos,gpforce]
-    def set_gp_state(self,value,can_id=1):
-        assert 0 <= value <= 255, "value must be between 0 and 255"
-        open_gp = b'\x00' + value.to_bytes(1, 'big') + b'\xFF\xFF\xFF\xFF\x00\x00'
-        
-        while 1:
-            self.send_can_data(b'\x00\x00\x00\x01', open_gp, can_id)
-            data = self.read_data() 
-            if data is not None:
-                _, gpdata = data
-                while gpdata == 0:
-                    self.send_can_data(b'\x00\x00\x00\x01', open_gp, can_id)
-                    data = self.read_data()
-                    if data is not None:
-                        _, gpdata = data
-                gpstate,gppos,gpforce = gpdata[16:18],gpdata[18:20],gpdata[22:24]
-                return [gpstate,gppos,gpforce]
-    def close_gp(self):
-        close_gp = b'\x00\x00\xFF\xFF\xFF\xFF\x00\x00'
-        while 1:
-            self.send_can_data(b'\x00\x00\x00\x01', close_gp, 0x01)
-            data = self.read_data() 
-            if data is not None:
-                _, gpdata = data
-                while gpdata == 0:
-                    self.send_can_data(b'\x00\x00\x00\x01', close_gp, 0x01)
-                    data = self.read_data()
-                    if data is not None:
-                        _, gpdata = data
-                gpstate,gppos,gpforce = gpdata[16:18],gpdata[18:20],gpdata[22:24]
-                return [gpstate,gppos,gpforce]
-        
-    def control_gp(self, gpstate, gppos, gpforce):
-        gpstate = gpstate.to_bytes(2, 'big')
-        gppos = gppos.to_bytes(2, 'big')
-        gpforce = gpforce.to_bytes(2, 'big')
-        gpcontrol_data = b'\x00\x00' + gpstate + gppos + b'\x00\x00' + gpforce
-        print(f"gpcontrol_data: {gpcontrol_data.hex()}")
-            
-        while 1:   
-            self.send_can_data(b'\x00\x00\x00\x01', gpcontrol_data, 0x01)
-            data = self.read_data()
-            if data is not None:
-                _, gpdata = data
-                while gpdata == 0:
-                    self.send_can_data(b'\x00\x00\x00\x01', gpcontrol_data, 0x01)
-                    data = self.read_data()
-                    if data is not None:
-                        _, gpdata = data
-                gpstate,gppos,gpforce = gpdata[16:18],gpdata[18:20],gpdata[22:24]
-                return [gpstate,gppos,gpforce]
-            # return data
-    
-    def close(self):
-        if self.ser:
-            self.ser.close()
-
 
 class eval:
     def __init__(self,camera,persistentClient,gp_contrpl,real_robot=False,data_true=False,ckpt_dir=r'/workspace/exchange/4-24/act',ckpt_name="policy_step_78000_seed_0.ckpt",hdf5_path=r'/workspace/exchange/4-24/hdf5_file_exchange/episode_6.hdf5',state_dim=8,temporal_agg=False):
@@ -560,16 +161,20 @@ class eval:
         }
         image_dict = {i:[] for i in camera_names}
         # print(image_dict)
+        name_to_serial = {
+            v['config']['camera_name']: serial for serial, v in self.camera.multi_device_sync_config.items()
+        }
         ActionGeneration = ActionGenerator(config)
         for i in tqdm(range(loop_len)):
             # print(f"roll:{i}")
             ActionGeneration.t = i
             if self.real_robot:
                 if self.data_true:
-                    self.updata_frame()
+                    # self.updata_frame()
                     left_qpos = self.persistentClient.get_arm_position_joint(1)
                     right_qpos = self.persistentClient.get_arm_position_joint(2)
                     left_gp ,right_gp= self.gp_contrpl.state
+                    print(left_gp ,right_gp)
                     # left_pos=left_gp[1]
                     # left_force = left_gp[2]
                     # right_pos=right_gp[1]
@@ -583,13 +188,13 @@ class eval:
                     radius_qpos.extend(right_qpos)
                     gpstate, gppos, gpforce = map(lambda x: str(x) if not isinstance(x, str) else x, right_gp)
                     radius_qpos.extend([int(gppos, 16), int(gpforce, 16)])
-                    # print(radius_qpos)
-                    # if self.is_close(self.persistentClient.get_arm_position_joint(1)[:3],[-121.42, -599.741, -209.687]) or i >30:
-                    #     task_complete_step = 1
-                    
+                    color_image_dict,depth_image_dict,color_width, color_height = camera.get_images()
                     for camera_name in camera_names:
-                        # self.image[camera_name] = 
-                        image_dict[camera_name] = self.image[camera_name]
+                        serial_number = name_to_serial.get(camera_name)
+                        if serial_number and serial_number in color_image_dict:
+                            self.image[camera_name] = np.array(color_image_dict[serial_number], dtype=np.uint8)
+                            image_dict[camera_name] = self.image[camera_name]
+                            # print(image_dict[camera_name].shape)    
                         # qpos = self.persistentClient.get_arm_position_joint(1)
                         # radius_qpos = [math.radians(j) for j in qpos]
                         # img_copy = [row[:] for row in image_dict[camera_name]]  # 深拷贝，防止改到原图
@@ -662,56 +267,47 @@ class eval:
                 else:
                     self.persistentClient.set_arm_position(list(right_arm_action), "joint", 2)
                 self.persistentClient.set_arm_position(list(left_arm_action), "joint", 1)
-                # print(int(left_gp[0]))
-                self.gp_contrpl.state_data_1=int(left_gp[0])
                 if right_gp.size == 0:
-                    pass
+                    self.gp_contrpl.set_state([int(left_gp[0]),0])
                 else:
-                    # print("设置右手")
-                    self.gp_contrpl.state_data_2=int(right_gp[0])
+                    self.gp_contrpl.set_state([int(left_gp[0]),int(right_gp[0])])
             actions_list.append(actions)
-            # loss.append((actions - dict_['action'][i]) ** 2)
         today = current_time.strftime("%m-%d-%H-%M")
         path_save_image = os.path.join(os.getcwd(), "deploy_image", f"{today}")
         os.makedirs(path_save_image, exist_ok=True)
         image_path = os.path.join(path_save_image, config['backbone']+"_"+ os.path.splitext(config['ckpt_name'])[0]+ ".png")
         loss_apth = os.path.join(path_save_image, 'loss' + current_time.strftime("%m-%d+8-%H-%M") + ".png")
         radius_qpos_list_ = [row[:self.state_dim] for row in self.radius_qpos_list]
-        # print(np.array(radius_qpos_list_).shape, np.array(actions_list).shape,self.state_dim)
         visualize_joints(radius_qpos_list_, actions_list, image_path, STATE_NAMES=STATE_NAMES)
-        # sys.exit(0)
-        # os._exit(0)
-        # self.gp_contrpl.stop()
         print("执行完成")
-complete_sign = 0
+# complete_sign = 0
 if __name__ == '__main__':
-    camera = CAMERA_HOT_PLUG()
+    camera = CAMERA_HOT_PLUG(fps=30)
     
     robot = PersistentClient('192.168.3.15', 8001)
     gpcontrol = GPCONTROL()
     gpcontrol.start()
-    # print(gpcontrol.state)
     time.sleep(3)
     eval(camera=camera,
          persistentClient=robot,
          gp_contrpl=gpcontrol,
          real_robot=True,
-         data_true=False,
-         ckpt_dir=r'/workspace/exchange/5-9/exchange/act',
-         ckpt_name='policy_step_40000_seed_0.ckpt',
+         data_true=True,
+         ckpt_dir=r'/workspace/exchange/5-9/exchange/act_overwrited',
+         ckpt_name='policy_step_10000_seed_0.ckpt',
          hdf5_path=r'/workspace/exchange/5-9/exchange/episode_22.hdf5',
          state_dim=16,
          temporal_agg=True)
     # time.sleep(2)
     print("第二段")
-    eval(camera=camera,
-         persistentClient=robot,
-         gp_contrpl=gpcontrol,
-         real_robot=True,
-         data_true=False,
-         ckpt_dir=r'/workspace/exchange/5-9/duikong/act',
-         ckpt_name='policy_best.ckpt',
-         hdf5_path=r'/workspace/exchange/5-9/duikong/episode_23.hdf5',
-         state_dim=8,
-         temporal_agg=True)
+    # eval(camera=camera,
+    #      persistentClient=robot,
+    #      gp_contrpl=gpcontrol,
+    #      real_robot=True,
+    #      data_true=False,
+    #      ckpt_dir=r'/workspace/exchange/5-9/duikong/act',
+    #      ckpt_name='policy_best.ckpt',
+    #      hdf5_path=r'/workspace/exchange/5-9/duikong/episode_23.hdf5',
+    #      state_dim=8,
+    #      temporal_agg=True)
     # print("qwekqweqwe")

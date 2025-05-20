@@ -18,6 +18,7 @@ import wandb
 # 限制 PyTorch 只能看到 GPU 1
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+os.environ['TORCH_USE_CUDA_DSA'] = '1'
 if torch.cuda.is_available():
     num_gpus = torch.cuda.device_count()
     for i in range(num_gpus):
@@ -30,8 +31,10 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/5-9/exchange/act_test",#ckpt保存路径
+            'ckpt_dir': "/workspace/exchange/5-9/exchange/act_overwrited",#ckpt保存路径
             'dataset_dir':"/workspace/exchange/5-9/exchange",#数据集路径
+            'state_dim': 16,
+            'action_dim': 16,
             'model_type':'ACT',
             'policy_class': 'ACT',
             'task_name': 'train',
@@ -61,8 +64,6 @@ class Train:
             'chunk_size': 45,
             'num_queries':45,
             'hidden_dim': 512,
-            'state_dim': 16,
-            'action_dim': 16,
             'dim_feedforward': 3200,
             'num_heads': 8,
             'backbone': 'resnet18',

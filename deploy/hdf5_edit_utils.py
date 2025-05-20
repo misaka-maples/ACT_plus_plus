@@ -382,7 +382,19 @@ class Modify_hdf5:
                 
         gray_images_3ch = np.stack([gray_images]*3, axis=-1)
         return gray_images_3ch
-    def modify_hdf5(self, file_path, compress=None, truncate_ranges=None, edit=False, exposure_factor=1, save_as_new_file=False,arm = 'arm',gray = False,one_arm=False):
+    def overwrite_img(self,img,top, bottom, left, right):
+        # 参数：四边的黑边宽度（单位：像素）
+
+        # 获取图像尺寸
+        h, w = img.shape[:2]
+
+        # 涂黑四边
+        img[0:top, :] = 0                     # 上
+        img[h-bottom:h, :] = 0               # 下
+        img[:, 0:left] = 0                   # 左
+        img[:, w-right:w] = 0                # 右
+        return img
+    def modify_hdf5(self, file_path, compress=None, truncate_ranges=None, edit=False, exposure_factor=1, save_as_new_file=False,arm = 'arm',gray = False,one_arm=False,save_img=False):
         """
         修改 HDF5 文件中的摄像头数据，可进行解压、曝光调整、截断，并保存为新文件或覆盖原文件。
 
@@ -404,7 +416,7 @@ class Modify_hdf5:
                 parent_dir = os.path.dirname(file_path)
                 print(parent_dir)
                 # 在上一级目录下新建文件夹
-                new_dir = os.path.join(parent_dir, f'{parent_dir}_gray')
+                new_dir = os.path.join(parent_dir, f'{parent_dir}_overwrited')
                 os.makedirs(new_dir, exist_ok=True)
 
                 # 文件名不变，复制到新目录
@@ -433,7 +445,7 @@ class Modify_hdf5:
                 left = left_paths[0]
                 qpos_key = qpos_paths[0]
                 action_key = action_paths[0]
-                print(qpos_key)
+                # print(qpos_key)
                 # 加载数据（可选择 copy）
                 if save_as_new_file:
                     camera_top_data = f[top][:].copy()
@@ -455,8 +467,8 @@ class Modify_hdf5:
                 # actions[:,:6] = np.degrees(actions[:,:6])
                 # qpos[:,9:14] = np.degrees(qpos[:,8:14])
                 # actions[:,9:14] = np.degrees(actions[:,8:14])
-                qpos[:,8] = np.deg2rad(qpos[:,8])
-                actions[:,8] = np.deg2rad(actions[:,8])
+                # qpos[:,8] = np.deg2rad(qpos[:,8])
+                # actions[:,8] = np.deg2rad(actions[:,8])
                 # print(qpos)
                 camera_top_data_np = np.array(camera_top_data)
                 camera_right_data_np = np.array(camera_right_data)
@@ -474,15 +486,32 @@ class Modify_hdf5:
                     camera_right_data = camera_right_data_np_gray.copy()
                     camera_left_data = camera_left_data_np_gray.copy()
                 # print(camera_top_data_np_gray.shape,camera_right_data_np_gray.shape,camera_left_data_np_gray.shape,qpos_np.shape,actions_np.shape)
+                if False:
+                    save_dir = 'test_images_png'
+                    os.makedirs(save_dir, exist_ok=True)  # 自动创建保存目录
 
-                # save_dir = 'gray_images_png'
-                # os.makedirs(save_dir, exist_ok=True)  # 自动创建保存目录
+                    # for i in range(gray_images_3ch.shape[0]):
+                    img = camera_top_data_np[160].copy()  # 取出第i张 (480, 640, 3)
+                    # img = self.overwrite_img(img,200,0,240,130)
+                    # img = self.overwrite_img(img,240,0,0,0)
+                    # 计算图片中点高度
+                    # h, w = img.shape[:2]
+                    # img[:h//2, :] = 0  # 将上半部分设为黑色
 
-                # # for i in range(gray_images_3ch.shape[0]):
-                # img = camera_top_data_np_gray[0]  # 取出第i张 (480, 640, 3)
-
-                # save_path = os.path.join(save_dir, f'gray_image.png')  # 文件名自动编号
-                # cv2.imwrite(save_path, img)
+                    save_path = os.path.join(save_dir, f'image.png')  # 文件名自动编号
+                    cv2.imwrite(save_path, img)
+                    print(save_path)
+                if True:
+                    for camera_name, cam_data in zip(camera_names,[camera_left_data, camera_top_data, camera_right_data]):
+                        print('camera_name,',camera_name)
+                        for i, img in enumerate(cam_data):
+                            if camera_name == "left_wrist":
+                                img = self.overwrite_img(img,200,0,240,130)
+                                # cv2.imwrite('/workspace/left_image.png', img)
+                                # print(cam_data.shape,img.shape,i)
+                            elif camera_name == "top":
+                                img = self.overwrite_img(img,240,0,0,0)
+                                # cv2.imwrite('/workspace/top_image.png', img)
                 if edit:
                     def decompress_images(compressed_data):
                         image_list = []
@@ -596,7 +625,7 @@ class Modify_hdf5:
                 compress=False,
                 edit=False,
                 exposure_factor=1,
-                save_as_new_file=False,  # 不影响原始文件
+                save_as_new_file=True,  # 不影响原始文件
                 gray=False,
                 one_arm=False
                 )
@@ -950,7 +979,7 @@ if __name__ == '__main__':
     #     'qpos': (0, 558),
     # }
     test = Modify_hdf5()
-    # test.batch_modify_hdf5('/workspace/exchange/5-9/temp')
+    # test.batch_modify_hdf5('/workspace/exchange/5-9/duikong')
     # test.modify_hdf5(
     #     file_path='/workspace/exchange/episode_0.hdf5', 
     #     compress=False,
@@ -964,9 +993,9 @@ if __name__ == '__main__':
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # for i in range(32,53):
-    # test.save_arm_video('/workspace/exchange/4-28/hdf5_file_duikong_new', fps=10, i=0,arm_path='observations/images/top',exposure_factor = 1)
+    test.save_arm_video('/workspace/exchange/5-9/duikong_overwrited', fps=10, i=1,arm_path='observations/images/left_wrist',exposure_factor = 1)
     # test.save_video('/workspace/exchange/4-24', fps=10, i=1,arm='left_wrist',exposure_factor = 1)
-    test.visual_qpos_action('/workspace/exchange/5-9/exchange/episode_15.hdf5')
+    # test.visual_qpos_action('/workspace/exchange/5-9/exchange/episode_15.hdf5')
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
     # top_image = "camera_top"

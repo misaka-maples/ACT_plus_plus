@@ -70,7 +70,7 @@ RIGHT_ARM_TASK_CONFIGS = {
         'lr': 2e-5,
         'num_episodes': None,
         'episode_len': 400,
-        'camera_names': ['top', 'right_wrist'],
+        'camera_names': ['left_wrist','top', 'right_wrist'],
         'chunk_size': 15,
         'hidden_dim': 512,
         'dim_feedforward': 3200,

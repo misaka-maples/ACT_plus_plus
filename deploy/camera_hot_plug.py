@@ -278,19 +278,22 @@ class CAMERA_HOT_PLUG:
         return arg
 if __name__ == "__main__":
     camera = CAMERA_HOT_PLUG(fps=30)
-    right_camera_sn = 'CP1L44P0006E'
-    print(camera.multi_device_sync_config)
+    right_camera_sn = 'CP1L44P0004Y'
+    # print(camera.multi_device_sync_config)
     # time.sleep(1)
 #     [[612.32965088   0.         643.00286865]
 #  [  0.         612.49316406 360.31613159]
 #  [  0.           0.           1.        ]]
     while True:
+
         color_image_dict,depth_image_dict,color_width, color_height = camera.get_images()
         color_image_dict_np = np.array(color_image_dict[right_camera_sn],dtype=np.uint8)
-        print(color_image_dict_np.shape)
+        # print(color_image_dict_np.shape)
         # cv2.imwrite("color.png",color_image_dict_np)
-        # cv2.imshow("color.png",color_image_dict_np)
-        depth_image_dict_np = np.array(depth_image_dict[right_camera_sn],dtype=np.uint8)
-        print(depth_image_dict_np.shape)
+        cv2.imshow("color",color_image_dict_np)
+        cv2.waitKey(1)
+        # depth_image_dict_np = np.array(depth_image_dict[right_camera_sn])
+        # np.save("depth.npy",depth_image_dict_np)
+        # print(depth_image_dict_np.shape)
         # arg = camera.get_color_intrinsic_matrix()
         # print(arg)

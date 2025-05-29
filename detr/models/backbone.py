@@ -4,7 +4,7 @@ Backbone modules.
 """
 from collections import OrderedDict
 
-import torch
+import torch,os
 import torch.nn.functional as F
 import torchvision
 from torch import nn
@@ -79,19 +79,35 @@ class BackboneBase(nn.Module):
         xs = self.body(tensor)
         return xs
 
+
 class Backbone(BackboneBase):
     """ResNet backbone with frozen BatchNorm."""
     def __init__(self, name: str,
                  train_backbone: bool,
                  return_interm_layers: bool,
-                 dilation: bool):
+                 dilation: bool,
+                 simclr_pretrained_path: str = None):  # <- 新增参数
+
         if name.startswith('resnet'):
             print(f'=================Using resnet {name}=================')
             backbone = getattr(torchvision.models, name)(
                 replace_stride_with_dilation=[False, False, dilation],
-                pretrained=is_main_process(), norm_layer=FrozenBatchNorm2d) # pretrained # TODO do we want frozen batch_norm??
+                pretrained=is_main_process(),  # 原有逻辑保留
+                norm_layer=FrozenBatchNorm2d)
+
+            # 替换 fc 层（SimCLR 默认处理）
+            backbone.fc = nn.Identity()
+
             num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
-    
+
+            # ✅ 如果指定了 simclr 预训练模型路径，则加载它（非强制）
+            if simclr_pretrained_path and os.path.exists(simclr_pretrained_path):
+                print(f"[SimCLR] Loading pretrained encoder from: {simclr_pretrained_path}")
+                state_dict = torch.load(simclr_pretrained_path, map_location='cpu')
+                # 仅加载匹配 encoder 的部分
+                missing_keys, unexpected_keys = backbone.load_state_dict(state_dict, strict=False)
+                print(f"[SimCLR] Missing keys: {missing_keys}")
+                print(f"[SimCLR] Unexpected keys: {unexpected_keys}")
 
         super().__init__(backbone, train_backbone, num_channels, return_interm_layers, name)
 
@@ -116,7 +132,12 @@ def build_backbone(args):
     position_embedding = build_position_encoding(args)
     train_backbone = args.lr_backbone > 0
     return_interm_layers = args.masks
-    backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
+
+    # ✅ 支持传入 simclr encoder 路径（如无，则默认为 None）
+    simclr_path = getattr(args, "simclr_pretrained_path", None)
+
+    backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation,
+                        simclr_pretrained_path=simclr_path)
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels
     return model

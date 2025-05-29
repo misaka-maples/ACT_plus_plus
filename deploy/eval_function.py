@@ -292,7 +292,7 @@ if __name__ == '__main__':
          persistentClient=robot,
          gp_contrpl=gpcontrol,
          real_robot=True,
-         data_true=True,
+         data_true=False,
          ckpt_dir=r'/workspace/exchange/5-9/exchange/act_overwrited',
          ckpt_name='policy_step_10000_seed_0.ckpt',
          hdf5_path=r'/workspace/exchange/5-9/exchange/episode_22.hdf5',
@@ -300,14 +300,13 @@ if __name__ == '__main__':
          temporal_agg=True)
     # time.sleep(2)
     print("第二段")
-    # eval(camera=camera,
-    #      persistentClient=robot,
-    #      gp_contrpl=gpcontrol,
-    #      real_robot=True,
-    #      data_true=False,
-    #      ckpt_dir=r'/workspace/exchange/5-9/duikong/act',
-    #      ckpt_name='policy_best.ckpt',
-    #      hdf5_path=r'/workspace/exchange/5-9/duikong/episode_23.hdf5',
-    #      state_dim=8,
-    #      temporal_agg=True)
-    # print("qwekqweqwe")
+    eval(camera=camera,
+         persistentClient=robot,
+         gp_contrpl=gpcontrol,
+         real_robot=True,
+         data_true=False,
+         ckpt_dir=r'/workspace/exchange/5-9/duikong/act',
+         ckpt_name='policy_best.ckpt',
+         hdf5_path=r'/workspace/exchange/5-9/duikong/episode_23.hdf5',
+         state_dim=8,
+         temporal_agg=True)

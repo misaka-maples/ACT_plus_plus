@@ -15,6 +15,16 @@ import numpy as np
 import IPython
 e = IPython.embed
 
+import matplotlib.pyplot as plt
+
+# mask: shape [B, 1, H, W]
+def visualize_mask(mask, index=0):
+    """可视化第 index 个样本的 mask"""
+    m = mask[index, 0].detach().cpu().numpy()  # shape: [H, W]
+    plt.imshow(m, cmap='gray')
+    plt.title(f"Mask #{index}")
+    plt.colorbar()
+    plt.show()
 
 def reparametrize(mu, logvar):
     std = logvar.div(2).exp()
@@ -123,10 +133,47 @@ class DETRVAE_Decoder(nn.Module):
             
         return a_hat, a_proprio, hs_img
     
- 
+class RegionEnhancer(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.relu = nn.ReLU()
+
+    def forward(self, x, mask=None):
+        if mask is not None:
+            x = x * mask  # 可选，如果你有 mask
+        return self.relu(self.conv(x))
+def visualize_feature_with_mask(feature, mask, index=0):
+    """
+    可视化特征图（取平均），并叠加 mask
+    feature: [B, C, H, W]
+    mask: [B, 1, H, W]
+    """
+    fmap = feature[index].mean(dim=0).detach().cpu().numpy()
+    msk = mask[index, 0].detach().cpu().numpy()
+    plt.imshow(fmap, cmap='viridis')
+    plt.imshow(msk, cmap='Reds', alpha=0.4)
+    plt.title(f"Feature + Mask #{index}")
+    plt.axis("off")
+    plt.show()
+
+def resize_mask_to_image(mask, target_size=(480, 640), mode='nearest'):
+    """
+    将 mask resize 到目标图像大小（默认 480×640）
+    
+    Args:
+        mask: Tensor，形状 [B, 1, H, W]（与 features 对应）
+        target_size: tuple，(H_img, W_img)
+        mode: 上采样方式，推荐用 'nearest' 或 'bilinear'
+    
+    Returns:
+        resized_mask: Tensor [B, 1, H_img, W_img]
+    """
+    resized_mask = F.interpolate(mask, size=target_size, mode=mode)
+    return resized_mask
 class DETRVAE(nn.Module):
     """ This is the DETR module that performs object detection """
-    def __init__(self, backbones, transformer, encoder, state_dim, num_queries, camera_names, vq, vq_class, vq_dim, action_dim):
+    def __init__(self, backbones, transformer, encoder, state_dim, num_queries, camera_names, vq, vq_class, vq_dim, action_dim,features_region_enhancer):
         """ Initializes the model.
         Parameters:
             backbones: torch module of the backbone to be used. See backbone.py
@@ -141,6 +188,9 @@ class DETRVAE(nn.Module):
         self.camera_names = camera_names
         self.transformer = transformer
         self.encoder = encoder
+        self.features_region_enhancer = features_region_enhancer
+        if features_region_enhancer:
+            self.region_enhancer = RegionEnhancer(in_channels=512)
         self.vq, self.vq_class, self.vq_dim = vq, vq_class, vq_dim
         self.state_dim, self.action_dim = state_dim, action_dim
         hidden_dim = transformer.d_model
@@ -234,6 +284,39 @@ class DETRVAE(nn.Module):
                     latent_input = self.latent_out_proj(latent_sample)
 
         return latent_input, probs, binaries, mu, logvar
+    def make_center_mask(self,features, mask_size=(15, 15), center=None):
+        """
+        构造一个二值mask，中心在center处，大小为mask_size。
+        
+        Args:
+            features: Tensor, shape [B, C, H, W]
+            mask_size: tuple(int, int), 形如 (crop_h, crop_w)
+            center: tuple(int, int) or None，形如 (center_h, center_w)
+                    若为 None，则默认居中
+            
+        Returns:
+            mask: Tensor, shape [B, 1, H, W]
+        """
+        B, _, H, W = features.shape
+        crop_h, crop_w = mask_size
+
+        if center is None:
+            center_h, center_w = H // 2, W // 2
+        else:
+            center_h, center_w = center
+
+        start_h = max(center_h - crop_h // 2, 0)
+        start_w = max(center_w - crop_w // 2, 0)
+        end_h = min(start_h + crop_h, H)
+        end_w = min(start_w + crop_w, W)
+
+        # 修正 start_h/w 以确保 mask 是指定大小（处理边缘越界）
+        start_h = end_h - crop_h
+        start_w = end_w - crop_w
+
+        mask = torch.zeros((B, 1, H, W), dtype=features.dtype, device=features.device)
+        mask[:, :, start_h:end_h, start_w:end_w] = 1.0
+        return mask
 
     def forward(self, qpos, image, env_state, actions=None, is_pad=None, vq_sample=None):
         """
@@ -252,9 +335,17 @@ class DETRVAE(nn.Module):
                 all_cam_features = []
                 all_cam_pos = []
                 for cam_id, cam_name in enumerate(self.camera_names):
-                    features, pos = self.backbones[cam_id](image[:, cam_id])
+                    features, pos = self.backbones[cam_id](image[:, cam_id])#torch.Size([8, 512, 15, 20])torch.Size([1, 512, 15, 20])
                     features = features[0] # take the last layer feature
                     pos = pos[0]
+                    if self.features_region_enhancer:
+                        mask = self.make_center_mask(features,(4,2),(15,10))
+                        resized_mask = resize_mask_to_image(mask, target_size=(480, 640))
+
+                        # 可视化
+                        # visualize_mask(resized_mask)  # 上面已经定义好的函数
+                        # visualize_feature_with_mask(features, mask)
+                        features = self.region_enhancer(features,mask)  # 增强前特征 shape: [B, C, H, W]
                     all_cam_features.append(self.input_proj(features))
                     all_cam_pos.append(pos)
             else:
@@ -262,7 +353,13 @@ class DETRVAE(nn.Module):
                 all_cam_pos = []
                 bs,_,_,h,w = image.shape
                 features, pos = self.backbones[0](image.reshape([-1,3,image.shape[-2],image.shape[-1]]))
-                project_feature = self.input_proj(features[0]) 
+                if self.features_region_enhancer:
+                    mask = self.make_center_mask(features)
+                    enhanced_feature = self.region_enhancer(features[0],mask)  # 增强前特征 shape: [B*2, C, H, W]
+                    project_feature = self.input_proj(enhanced_feature)
+                else:
+                    project_feature = self.input_proj(features[0]) 
+                 
                 project_feature = project_feature.reshape([bs, 2,project_feature.shape[1],project_feature.shape[2],project_feature.shape[3]])
                 all_cam_features.append(project_feature[:,0,:])
                 all_cam_features.append(project_feature[:,1,:])
@@ -404,6 +501,7 @@ def build(args):
             vq_class=args.vq_class,
             vq_dim=args.vq_dim,
             action_dim=args.action_dim,
+            features_region_enhancer=args.features_region_enhancer,
         )
     elif args.model_type=="HIT":
         transformer_decoder = build_transformer_decoder(args)

@@ -281,8 +281,8 @@ if __name__ == "__main__":
             if message == "1,4":
                 client.set_arm_position( [-109.0, -811.015, -288.718, 2.47157, -0.00245327, 2.28383],"pose",1)
             if message == "1":
-                client.set_speed(1,30)
-                client.set_speed(2,30)
+                client.set_speed(1,10)
+                client.set_speed(2,10)
             if message == "2":
                 client.set_arm_position([-127.205, -584.918, -238.196, 2.8373, -0.121059, 1.07089],"pose",1)
                 # client.set_arm_position([-135.806, -657.58, -132.078, 2.35454, 0.0848985, 1.51967],"pose",1)
@@ -310,14 +310,14 @@ if __name__ == "__main__":
                     client.set_arm_position([320.871, 8.02429, 569.908, -2.77289, 1.54682, -0.36409],"pose",2)
                     client.set_arm_position([-77.3069, 482.59, 523.98, -1.74372, -0.200726, -1.37602],"pose",2)
                     client.set_arm_position([-134.846, 623.718, -169.467, -2.37875, -0.126138, -3.0992],"pose",2) 
-                    client.set_arm_position([-77.3069, 482.59, 523.98, -1.74372, -0.200726, -1.37602],"pose",2)
+                    client.set_arm_position( [629.137, -161.689, 590.811, 1.6477, 1.38221, 2.1665],"pose",2)
                     # client.set_arm_position([320.871, 8.02429, 569.908, -2.77289, 1.54682, -0.36409],"pose",2)
 
             if message == "4":
-                client.set_close(1)
+                client.set_close(2)
                 time.sleep(1)
-                client.set_clear(1)
-                client.set_open(1) 
+                client.set_clear(2)
+                client.set_open(2) 
                 # client.get_arm_position_pose(2)
                 # deta = client.set_arm_position([-124.602, -752.314, -212.362, 2.47183, -0.00238126, 1.49759], "pose", 1)
             if message == "4.1":

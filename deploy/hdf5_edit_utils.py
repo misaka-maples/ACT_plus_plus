@@ -1,6 +1,6 @@
 import copy
 import random
-from visualize_episodes import visualize_joints
+# from visualize_episodes import visualize_joints
 import matplotlib.pyplot as plt
 import sys
 from pathlib import Path
@@ -14,8 +14,7 @@ import os
 import fnmatch
 import numpy as np
 import traceback
-from constants import RIGHT_ARM_TASK_CONFIGS, HDF5_DIR, DATA_DIR
-camera_names = RIGHT_ARM_TASK_CONFIGS['train']['camera_names']
+camera_names = ['left_wrist','top', 'right_wrist']
 max_timesteps = 0
 JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
 STATE_NAMES = JOINT_NAMES + ["gripper_pos"]+ ["gripper_force"]
@@ -34,6 +33,45 @@ class Modify_hdf5:
                 hdf5_files.append(os.path.join(root, filename))
         print(f'Found {len(hdf5_files)} hdf5 files')
         return hdf5_files
+        # 可视化关节状态和动作
+    def visualize_joints(self,qpos_list, command_list, plot_path=None, ylim=None, label_overwrite=None,STATE_NAMES=STATE_NAMES):
+        if label_overwrite:
+            label1, label2 = label_overwrite
+        else:
+            label1, label2 = 'State', 'Command'
+
+        qpos = np.array(qpos_list)  # 转为 NumPy 数组
+        command = np.array(command_list)
+        num_ts, num_dim = qpos.shape  # 时间步和维度数
+        h, w = 2, num_dim
+        num_figs = num_dim
+        fig, axs = plt.subplots(num_figs, 1, figsize=(w, h * num_figs))
+
+        # 绘制关节状态
+        all_names = [name + '_left' for name in STATE_NAMES] + [name + '_right' for name in STATE_NAMES]
+        for dim_idx in range(num_dim):
+            ax = axs[dim_idx]
+            ax.plot(qpos[:, dim_idx], label=label1)
+            ax.set_title(f'Joint {dim_idx}: {all_names[dim_idx]}')
+            ax.legend()
+
+        # 绘制动作指令
+        for dim_idx in range(num_dim):
+            ax = axs[dim_idx]
+            ax.plot(command[:, dim_idx], label=label2)
+            ax.legend()
+
+        if ylim:
+            for dim_idx in range(num_dim):
+                ax = axs[dim_idx]
+                ax.set_ylim(ylim)
+
+        plt.tight_layout()
+        plt.savefig(plot_path)
+        print(f'Saved qpos plot to: {plot_path}')
+        plt.close()
+
+
     def check_hdf5(self, file_path):
         if not os.path.exists(file_path):
             print("文件不存在")
@@ -815,10 +853,10 @@ class Modify_hdf5:
             
             print(image_path)
             print(qpos_path_data[70])
-            visualize_joints(qpos_path_data, action_path_data, image_path, STATE_NAMES=STATE_NAMES)
+            self.visualize_joints(qpos_path_data, action_path_data, image_path, STATE_NAMES=STATE_NAMES)
 
 
-    def get_image_paths(directory, prefix, extension):
+    def get_image_paths(self,directory, prefix, extension):
         """
         获取指定目录下所有图像的路径。
 
@@ -873,19 +911,19 @@ class Modify_hdf5:
                 raise ValueError(f"Failed to read the image at {image_path}.")
             return image_data
 
-    def get_top_right_image(file_path, image_extension):
+    def get_top_right_image(self,file_path, image_extension):
         image_directory = file_path  # 图像文件夹路径
         right_image = "camera_right_wrist"  # 图像文件名前缀
         top_image = "camera_top"
         # image_extension = ".jpg"  # 图像扩展名
         # num_images = 137  # 图像数量
-        top__ = get_image_from_folder(image_directory, top_image, image_extension)
-        right__ = get_image_from_folder(image_directory, right_image, image_extension)
+        top__ = self.get_image_from_folder(image_directory, top_image, image_extension)
+        right__ = self.get_image_from_folder(image_directory, right_image, image_extension)
         return top__, right__
-    def save_hdf5(file_path, joints_nums, episode_idx, data_dict, reshape_hdf5_path):
+    def save_hdf5(self,file_path, joints_nums, episode_idx, data_dict, reshape_hdf5_path):
         # 获取最大时间步数
 
-        max_timesteps = min(len(get_image_paths(file_path, "camera_right_wrist", ".jpg")), len(get_image_paths(file_path, "camera_top", ".jpg")), len(data_dict['/observations/qpos']), len(data_dict['/action']))
+        max_timesteps = min(len(self.get_image_paths(file_path, "camera_right_wrist", ".jpg")), len(self.get_image_paths(file_path, "camera_top", ".jpg")), len(data_dict['/observations/qpos']), len(data_dict['/action']))
         # print(max_timesteps)
         # 确保目录存在
         # reshape_hdf5_path = os.path.join(DATA_DIR, "reshape_hdf5")
@@ -923,20 +961,20 @@ class Modify_hdf5:
             print(f"Data saved to {dataset_path}.hdf5")
 
 
-    def get_image_from_folder(image_directory, image_prefix, image_extension):
+    def get_image_from_folder(self,image_directory, image_prefix, image_extension):
         # 示例：获取 137 张图像的路径
 
         return_image_path = []
         # 获取所有图像路径
-        image_paths = get_image_paths(image_directory, image_prefix, image_extension)
+        image_paths = self.get_image_paths(image_directory, image_prefix, image_extension)
         for image_path in image_paths:
-            i = read_image(image_path)
+            i = self.read_image(image_path)
             return_image_path.append(i)
 
         return return_image_path
 
 
-    def batch_save_hdf5():
+    def batch_save_hdf5(self):
         for i in range(20):
             if i > 8:
                 image_directory = f"F:\\origin_data\\11_27\\{i + 1}"  # 图像文件夹路径
@@ -948,15 +986,15 @@ class Modify_hdf5:
             # num_images = 137  # 图像数量
             # max_timesteps = min(len(get_image_paths(image_directory, "camera_right_wrist", ".jpg")), len(get_image_paths(image_directory, "camera_top", ".jpg")))
 
-            top__ = get_image_from_folder(image_directory, top_image, image_extension)
+            top__ = self.get_image_from_folder(image_directory, top_image, image_extension)
             # print(len(top__[:max_timesteps]))
-            right__ = get_image_from_folder(image_directory, right_image, image_extension)
-            camera_top_data, camera_right_data, qpos_list, action_ = get_state(f"F:\\hdf5_file\\save_dir\\origin" + f'\\episode_{i}.hdf5')
+            right__ = self.get_image_from_folder(image_directory, right_image, image_extension)
+            camera_top_data, camera_right_data, qpos_list, action_ = self.get_state(f"F:\\hdf5_file\\save_dir\\origin" + f'\\episode_{i}.hdf5')
             # print(action_.shape)
 
             qpos_list = np.vstack([np.zeros((2, 7)), qpos_list])
             action_ = np.vstack([action_, np.zeros((1, 7))])
-            max_timesteps = min(len(get_image_paths(image_directory, "camera_right_wrist", ".jpg")), len(get_image_paths(image_directory, "camera_top", ".jpg")), len(qpos_list), len(action_))
+            max_timesteps = min(len(self.get_image_paths(image_directory, "camera_right_wrist", ".jpg")), len(self.get_image_paths(image_directory, "camera_top", ".jpg")), len(qpos_list), len(action_))
             # print(max_timesteps, action_.shape)
             # 获取所有图像路径
             data_dict = {
@@ -968,7 +1006,7 @@ class Modify_hdf5:
             }
 
             print(f"qpos_shape: {len(data_dict['/observations/qpos'])}\ntop_shape: {len(data_dict['/observations/images/top'])}\nright_shape: {len(data_dict['/observations/images/right_wrist'])}\naction_shape: {len(data_dict['/action'])}")
-            save_hdf5(image_directory, 7, i, data_dict, reshape_hdf5_path=DATA_DIR+'\\reshape_hdf5_qpos_2')
+            self.save_hdf5(image_directory, 7, i, data_dict, reshape_hdf5_path="/workspace/ACT_plus_plus/hdf5_file"+'\\reshape_hdf5_qpos_2')
 
 
 if __name__ == '__main__':
@@ -993,9 +1031,9 @@ if __name__ == '__main__':
     # batch_modify_hdf5(dataset_dir, output_dir, skip_mirrored_data=True)
     # 保存视频
     # for i in range(32,53):
-    test.save_arm_video('/workspace/exchange/5-9/duikong_overwrited', fps=10, i=1,arm_path='observations/images/left_wrist',exposure_factor = 1)
+    test.save_arm_video('/workspace/exchange/5-9/exchange_overwrited', fps=10, i=22,arm_path='observations/images/left_wrist',exposure_factor = 1)
     # test.save_video('/workspace/exchange/4-24', fps=10, i=1,arm='left_wrist',exposure_factor = 1)
-    # test.visual_qpos_action('/workspace/exchange/5-9/exchange/episode_15.hdf5')
+    # test.visual_qpos_action('/workspace/exchange/episode_0.hdf5')
     # image_directory = r"F:\origin_data\\11_27\\01"  # 图像文件夹路径
     # right_image = "camera_right_wrist"  # 图像文件名前缀
     # top_image = "camera_top"

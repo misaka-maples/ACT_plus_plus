@@ -1,8 +1,17 @@
 import numpy as np
-from tcp_tx import PersistentClient
 import time 
 import sys
 sys.path.append("./")
+import os, datetime, sys
+# 获取当前脚本的路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 获取上一级目录
+parent_dir = os.path.abspath(os.path.join(current_dir, "./deploy"))
+
+# 添加到 sys.path
+sys.path.append(parent_dir)
+from cjb.robot_control.tcp_tx import PersistentClient
 
 from deploy.eval_function import eval,CAMERA_HOT_PLUG,GPCONTROL
 # -*- coding: utf-8 -*-
@@ -587,25 +596,31 @@ class EvolutionStrategy:
 
         return True
 
-camera = CAMERA_HOT_PLUG()
-time.sleep(5)
+# camera = CAMERA_HOT_PLUG()
+# time.sleep(5)
 robot = PersistentClient('192.168.3.15', 8001)
 gpcontrol = GPCONTROL()
 gpcontrol.start()
 gpcontrol.state_data_1 = 0
-def gp():
-    data = np.load('/workspace/exchange/grasp_pos6d_series/0506_target_2_pose_series.npy')
+def gp(id):
+    data = np.load(f'/workspace/exchange/grasp_pos6d_series/0522_target_{id}_pose_series.npy')
     np.set_printoptions(precision=4, suppress=True)
     # client = PersistentClient('192.168.3.15', 8001)
-    gpcontrol.state_data_2 = 200
+    gpcontrol.state_data_2 = 140
     time.sleep(2)
     for index,i in enumerate(data):
         print(i)
+        if id == 0:
+
+
+            i[0]-=20
         if index == 3:
             print("关闭夹爪")
             time.sleep(2)
             gpcontrol.state_data_2 = 0
             time.sleep(2)
+            
+            print(i)
         robot.set_arm_position(i.tolist(),'pose',2)
 # def first_traj():
     
@@ -615,16 +630,16 @@ def gp():
 
 
 if __name__ == "__main__":
-    gp()
-    # time.sleep(100)
+    gp(id=6)
+    time.sleep(100)
     eval(camera=camera,
             persistentClient=robot,
             gp_contrpl=gpcontrol,
             real_robot=True,
             data_true=False,
-            ckpt_dir=r'/workspace/exchange/5-9/exchange/act',
-            ckpt_name='policy_step_40000_seed_0.ckpt',
-            hdf5_path=r'/workspace/exchange/5-9/exchange/episode_22.hdf5',
+            ckpt_dir=r'/workspace/exchange/5-9/exchange_overwrited/act_overwrited',
+            ckpt_name='policy_step_10000_seed_0.ckpt',
+            hdf5_path=r'/workspace/exchange/5-9/exchange_overwrited/episode_22.hdf5',
             state_dim=16,
             temporal_agg=True)
     time.sleep(2)

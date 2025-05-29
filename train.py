@@ -31,8 +31,8 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/5-9/exchange/act_overwrited",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/5-9/exchange",#数据集路径
+            'ckpt_dir': "/workspace/exchange/hdf5_file_exchange_5-29/act",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/hdf5_file_exchange_5-29",#数据集路径
             'state_dim': 16,
             'action_dim': 16,
             'model_type':'ACT',
@@ -66,7 +66,7 @@ class Train:
             'hidden_dim': 512,
             'dim_feedforward': 3200,
             'num_heads': 8,
-            'backbone': 'resnet18',
+            'backbone': 'resnet50',
             'same_backbones':False,
             # 'lr_backbone': 1e-5,
             'feature_loss':False,
@@ -85,6 +85,8 @@ class Train:
             'prediction_horizon':45,
             'num_inference_timesteps':80000,
             'ema_power':2/3,
+            'features_region_enhancer':False,
+            # 'simclr_pretrained_path':'/workspace/saved_models/simclr_encoder_epoch001_loss1.0307.pth',
         }
  
     def main(self):

@@ -1,4 +1,4 @@
-import torch
+import torch,torch_npu
 import numpy as np
 import os
 import pickle
@@ -15,38 +15,30 @@ from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy,HITPolicy
 # from policy_origin import ACTPolicy,CNNMLPPolicy,DiffusionPolicy
 from visualize_episodes import save_videos
 import wandb
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 # 限制 PyTorch 只能看到 GPU 1
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-os.environ['TORCH_USE_CUDA_DSA'] = '1'
-if torch.cuda.is_available():
-    num_gpus = torch.cuda.device_count()
-    for i in range(num_gpus):
-        print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
-else:
-    print("没有可用的 GPU。")
-server = "192.168.2.120"
 class Train:
     def __init__(self):
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/hdf5_file_exchange_5-29/act",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/hdf5_file_exchange_5-29",#数据集路径
+            'ckpt_dir': "/data/ACT/episode/hdf5_file_exchange_5-29/act_8p",#ckpt保存路径
+            'dataset_dir':"/data/ACT/episode/hdf5_file_exchange_5-29",#数据集路径
             'state_dim': 16,
             'action_dim': 16,
             'model_type':'ACT',
             'policy_class': 'ACT',
             'task_name': 'train',
-            'batch_size': 8,
+            'batch_size': 4,
             'seed': 0,
-            'num_steps': 80000,
+            'num_steps': 10000,
             'lr': 1e-5,
             'kl_weight': 10,
             'load_pretrain': False,
-            'eval_every': 1000,
-            'validate_every': 1000,
-            'save_every': 1000,
+            'eval_every': 10,
+            'validate_every': 10,
+            'save_every': 10,
             'camera_names': ['top','left_wrist','right_wrist'],
             'resume_ckpt_path': 'ckpts/act/policy_best.ckpt',
             'skip_mirrored_data': False,
@@ -60,7 +52,7 @@ class Train:
             'vq_dim': None,
             'vq': False,
             'no_encoder': False,
-            'worker_num': 8,
+            'worker_num': 16,
             'chunk_size': 45,
             'num_queries':45,
             'hidden_dim': 512,
@@ -86,6 +78,8 @@ class Train:
             'num_inference_timesteps':80000,
             'ema_power':2/3,
             'features_region_enhancer':False,
+            'nproc_per_node':8,
+            'node_rank':0,
             # 'simclr_pretrained_path':'/workspace/saved_models/simclr_encoder_epoch001_loss1.0307.pth',
         }
  
@@ -106,7 +100,16 @@ class Train:
         worker_num = self.args['worker_num']
         camera_names = self.args['camera_names']  # 摄像头名称列表
         # 调用 load_data 函数加载数据
+        
+        local_rank = int(os.environ.get("LOCAL_RANK",0))
+        world_size = int(os.environ.get("WORLD_SIZE",8))
+
+        dist.init_process_group("hccl",rank=(self.args['node_rank'])*(self.args['nproc_per_node'])+local_rank,world_size=world_size)
+        torch_npu.npu.set_device(local_rank)
+        device = torch.device(f"npu:{local_rank}")
         train_dataloader, val_dataloader, stats, _ = load_data(
+            world_size,
+            local_rank,
             dataset_dir, 
             name_filter=self.args.get('name_filter', lambda n: True),  # 根据实际情况传入 name_filter 函数
             camera_names=camera_names,  # 根据实际情况传入摄像头名称列表
@@ -132,18 +135,20 @@ class Train:
         stats_path = os.path.join(self.args['ckpt_dir'], 'dataset_stats.pkl')
         with open(stats_path, 'wb') as f:
             pickle.dump(stats, f)
-        best_ckpt_info = self.train(train_dataloader, val_dataloader)
+        best_ckpt_info = self.train(train_dataloader, val_dataloader,device,local_rank,world_size)
         best_step, min_val_loss, best_state_dict = best_ckpt_info
         # save best checkpoint
-        ckpt_path = os.path.join(self.args['ckpt_dir'], f'policy_best.ckpt')
-        torch.save(best_state_dict, ckpt_path)
+        if dist.get_rank() == 0:
+            ckpt_path = os.path.join(self.args['ckpt_dir'], f'policy_best.ckpt')
+            torch.save(best_state_dict, ckpt_path)
         # 记录日志
         end_time = time.time()
         runtime = end_time - start_time
         self.append_log(best_step, min_val_loss, runtime)
         print(f'Best ckpt, val loss {min_val_loss:.6f} @ step{best_step}')
-    def train(self, train_dataloader, val_dataloader):
+    def train(self, train_dataloader, val_dataloader,device,local_rank,world_size):
         # 从 self.args 获取配置信息
+        print(f"device in train :{device}")
         num_steps = self.args['num_steps']
         ckpt_dir = self.args['ckpt_dir']
         seed = self.args['seed']
@@ -156,18 +161,19 @@ class Train:
 
         # 创建策略
         policy = self.make_policy()
+        policy.to(device)
+        optimizer = self.make_optimizer(policy)
+        policy = DDP(policy,device_ids=[local_rank],find_unused_parameters=True)
         if self.args['load_pretrain']:
             loading_status = policy.deserialize(torch.load(os.path.join('/home/zfu/interbotix_ws/src/act/ckpts/pretrain_all', 'policy_step_50000_seed_0.ckpt')))
             print(f'loaded! {loading_status}')
         if os.path.exists(self.args['resume_ckpt_path']) is True:
             loading_status = policy.deserialize(torch.load(self.args['resume_ckpt_path']))
             print(f'Resume policy from: {self.args["resume_ckpt_path"]}, Status: {loading_status}')
-        policy.cuda()
-        optimizer = self.make_optimizer(policy)
 
         min_val_loss = np.inf
         best_ckpt_info = None
-
+        is_initialized = dist.get_rank() == 0 if dist.is_initialized() else True
         train_dataloader = self.repeater(train_dataloader)
         for step in tqdm(range(num_steps + 1)):
             # validation
@@ -178,7 +184,7 @@ class Train:
                     policy.eval()
                     validation_dicts = []
                     for batch_idx, data in enumerate(val_dataloader):
-                        forward_dict = self.forward_pass(data, policy)
+                        forward_dict = self.forward_pass(data, policy,device)
                         # print(forward_dict)
                         validation_dicts.append(forward_dict)
                         if batch_idx > 50:
@@ -189,11 +195,13 @@ class Train:
                     if self.args['wandb']:
 
                         wandb.log({"验证_loss": epoch_val_loss, "step": step})
-
-                    if epoch_val_loss < min_val_loss:
-                        min_val_loss = epoch_val_loss
-                        best_ckpt_info = (step, min_val_loss, deepcopy(policy.serialize()))
-                # Log additional metrics if necessary
+                    val_loss_list = self.gather_val_losses(epoch_val_loss,device,world_size)
+                    if dist.get_rank() == 0:
+                        val_loss_aver = sum(val_loss_list) / len(val_loss_list)
+                        if val_loss_aver < min_val_loss:
+                            min_val_loss = val_loss_aver
+                            best_ckpt_info = (step, min_val_loss, deepcopy(policy.module.serialize()))
+                    # Log additional metrics if necessary
                 if self.args['wandb']:
 
                     for k, v in validation_summary.items():
@@ -207,17 +215,20 @@ class Train:
                 print(summary_string)
 
             # evaluation
-            if (step > 0) and (step % save_every == 0):
+            if (step > 0) and (step % save_every == 0) and dist.get_rank()==0:
                 # first save then eval
-                ckpt_name = f'policy_step_{step}_seed_{seed}.ckpt'
+                process_id = dist.get_rank()
+                ckpt_name = f'policy_step_{step}_seed_{seed}_{process_id}.ckpt'
                 ckpt_path = os.path.join(ckpt_dir, ckpt_name)
-                torch.save(policy.serialize(), ckpt_path)
+                torch.save(policy.module.serialize(), ckpt_path)
 
             # training
             policy.train()
             optimizer.zero_grad()
             data = next(train_dataloader)
-            forward_dict = self.forward_pass(data, policy)
+            data_size=data[0].size()
+            #print(f"data_Size:{data_size}")
+            forward_dict = self.forward_pass(data, policy,device)
              # Log training loss to wandb
             loss = forward_dict['loss']
             if self.args['wandb']:
@@ -234,16 +245,28 @@ class Train:
             #     torch.save(policy.serialize(), ckpt_path)
 
         # 最后保存模型
-        ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
-        torch.save(policy.serialize(), ckpt_path)
-        best_step, min_val_loss, best_state_dict = best_ckpt_info
-        ckpt_path = os.path.join(ckpt_dir, f'policy_step_{best_step}_seed_{seed}.ckpt')
-        torch.save(best_state_dict, ckpt_path)
-        if self.args['wandb']:
+        if dist.get_rank() == 0:
+            ckpt_path = os.path.join(ckpt_dir, f'policy_last.ckpt')
+            torch.save(policy.module.serialize(), ckpt_path)
+        if dist.get_rank() == 0:
+            best_step, min_val_loss, best_state_dict = best_ckpt_info
+            ckpt_path = os.path.join(ckpt_dir, f'policy_step_{best_step}_seed_{seed}.ckpt')
+            torch.save(best_state_dict, ckpt_path)
+            if self.args['wandb']:
 
-            wandb.finish()  # Close the wandb run
-        print(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at step {best_step}')
-        return best_ckpt_info
+                wandb.finish()  # Close the wandb run
+            print(f'Training finished:\nSeed {seed}, val loss {min_val_loss:.6f} at step {best_step}')
+            return best_ckpt_info
+    def gather_val_losses(self,val,device,world_size):
+        val_tensor = torch.tensor([val],device=device)
+        print(device)
+        val_loss_list = [torch.zeros_like(val_tensor) for _ in range(world_size)]
+        dist.all_gather(val_loss_list,val_tensor)
+
+        if dist.get_rank() == 0:
+            val_loss_list = [t.item() for t in val_loss_list]
+            return val_loss_list
+
     def eval(self,ckpt_name):
         ckpt_dir = self.args['ckpt_dir']
         state_dim = self.args['state_dim']
@@ -262,7 +285,6 @@ class Train:
         policy = self.make_policy(policy_class, policy_config)
         loading_status = policy.deserialize(torch.load(ckpt_path, weights_only=True))
         print(loading_status)
-        policy.cuda()
         policy.eval()
         stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
         with open(stats_path, 'rb') as f:
@@ -314,12 +336,13 @@ class Train:
         else:
             raise NotImplementedError
         return optimizer
-    def forward_pass(self,data,policy):
+    def forward_pass(self,data,policy,device):
          # 解包输入数据，其中包含图像数据、qpos 数据、动作数据和填充标记
-        image_data, qpos_data, action_data, is_pad = data
+        image_data, qpos_data, action_data, is_pad,index= data
+        #print(f"index:{index}")
         # print(action_data.shape)
         # 将所有输入数据移动到 GPU 上（使用 .cuda()）
-        image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
+        image_data, qpos_data, action_data, is_pad = image_data.to(device), qpos_data.to(device), action_data.to(device), is_pad.to(device)
 
         # # 使用 policy 执行前向传播，传入相应的输入数据
         # print(f"qpos_data: {qpos_data.shape}")
@@ -327,12 +350,9 @@ class Train:
         # print(f"action_data: {action_data.shape}")
         return policy(qpos_data, image_data, action_data, is_pad)  # TODO remove None
     def repeater(self,data_loader):
-        epoch = 0
         for loader in repeat(data_loader):
-            for data in loader:
+            for data in data_loader:
                 yield data
-            print(f'Epoch {epoch} done')
-            epoch += 1
     def append_log(self, best_step, min_val_loss, runtime_seconds):
         log_path = os.path.join(self.args['ckpt_dir'], 'log.txt')
         with open(log_path, 'a') as f:

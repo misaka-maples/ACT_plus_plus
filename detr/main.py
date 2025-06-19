@@ -113,11 +113,14 @@ def get_args_parser():
     parser.add_argument('--gpu_id', type=int, default=0)
     return parser
 
-
+import os
 def build_ACT_model_and_optimizer(args_override):
     parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    world_size = int(os.environ.get("WORLD_SIZE", 1))
 
+    device = torch.device(f'npu:{local_rank}')       
     for k, v in args_override.items():
         print(f"Setting {k} to {v}")
         try:
@@ -126,7 +129,7 @@ def build_ACT_model_and_optimizer(args_override):
             print(f"Error setting {k} to {v}")
 
     model = build_ACT_model(args)
-    model.cuda()
+    model.to(device)
 
     param_dicts = [
         {"params": [p for n, p in model.named_parameters() if "backbone" not in n and p.requires_grad]},

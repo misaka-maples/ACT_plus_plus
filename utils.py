@@ -8,9 +8,8 @@ import cv2
 from time import time
 from torch.utils.data import TensorDataset, DataLoader
 import torchvision.transforms as transforms
-from pyorbbecsdk import FormatConvertFilter, VideoFrame
-from pyorbbecsdk import OBFormat, OBConvertFormat
-
+from torch.utils.data import BatchSampler
+from torch.utils.data.distributed import DistributedSampler
 import IPython
 
 e = IPython.embed
@@ -19,112 +18,6 @@ from typing import Union, Any, Optional
 
 import cv2
 import numpy as np
-
-
-def yuyv_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    yuyv = frame.reshape((height, width, 2))
-    bgr_image = cv2.cvtColor(yuyv, cv2.COLOR_YUV2BGR_YUY2)
-    return bgr_image
-
-
-def uyvy_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    uyvy = frame.reshape((height, width, 2))
-    bgr_image = cv2.cvtColor(uyvy, cv2.COLOR_YUV2BGR_UYVY)
-    return bgr_image
-
-
-def i420_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    y = frame[0:height, :]
-    u = frame[height:height + height // 4].reshape(height // 2, width // 2)
-    v = frame[height + height // 4:].reshape(height // 2, width // 2)
-    yuv_image = cv2.merge([y, u, v])
-    bgr_image = cv2.cvtColor(yuv_image, cv2.COLOR_YUV2BGR_I420)
-    return bgr_image
-
-
-def nv21_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    y = frame[0:height, :]
-    uv = frame[height:height + height // 2].reshape(height // 2, width)
-    yuv_image = cv2.merge([y, uv])
-    bgr_image = cv2.cvtColor(yuv_image, cv2.COLOR_YUV2BGR_NV21)
-    return bgr_image
-
-
-def nv12_to_bgr(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    y = frame[0:height, :]
-    uv = frame[height:height + height // 2].reshape(height // 2, width)
-    yuv_image = cv2.merge([y, uv])
-    bgr_image = cv2.cvtColor(yuv_image, cv2.COLOR_YUV2BGR_NV12)
-    return bgr_image
-
-
-def determine_convert_format(frame: VideoFrame):
-    if frame.get_format() == OBFormat.I420:
-        return OBConvertFormat.I420_TO_RGB888
-    elif frame.get_format() == OBFormat.MJPG:
-        return OBConvertFormat.MJPG_TO_RGB888
-    elif frame.get_format() == OBFormat.YUYV:
-        return OBConvertFormat.YUYV_TO_RGB888
-    elif frame.get_format() == OBFormat.NV21:
-        return OBConvertFormat.NV21_TO_RGB888
-    elif frame.get_format() == OBFormat.NV12:
-        return OBConvertFormat.NV12_TO_RGB888
-    elif frame.get_format() == OBFormat.UYVY:
-        return OBConvertFormat.UYVY_TO_RGB888
-    else:
-        return None
-
-
-def frame_to_rgb_frame(frame: VideoFrame) -> Union[Optional[VideoFrame], Any]:
-    if frame.get_format() == OBFormat.RGB:
-        return frame
-    convert_format = determine_convert_format(frame)
-    if convert_format is None:
-        print("Unsupported format")
-        return None
-    print("covert format: {}".format(convert_format))
-    convert_filter = FormatConvertFilter()
-    convert_filter.set_format_convert_format(convert_format)
-    rgb_frame = convert_filter.process(frame)
-    if rgb_frame is None:
-        print("Convert {} to RGB failed".format(frame.get_format()))
-    return rgb_frame
-
-
-def frame_to_bgr_image(frame: VideoFrame) -> Union[Optional[np.array], Any]:
-    width = frame.get_width()
-    height = frame.get_height()
-    color_format = frame.get_format()
-    data = np.asanyarray(frame.get_data())
-    image = np.zeros((height, width, 3), dtype=np.uint8)
-    if color_format == OBFormat.RGB:
-        image = np.resize(data, (height, width, 3))
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    elif color_format == OBFormat.BGR:
-        image = np.resize(data, (height, width, 3))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    elif color_format == OBFormat.YUYV:
-        image = np.resize(data, (height, width, 2))
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_YUYV)
-    elif color_format == OBFormat.MJPG:
-        image = cv2.imdecode(data, cv2.IMREAD_COLOR)
-    elif color_format == OBFormat.I420:
-        image = i420_to_bgr(data, width, height)
-        return image
-    elif color_format == OBFormat.NV12:
-        image = nv12_to_bgr(data, width, height)
-        return image
-    elif color_format == OBFormat.NV21:
-        image = nv21_to_bgr(data, width, height)
-        return image
-    elif color_format == OBFormat.UYVY:
-        image = np.resize(data, (height, width, 2))
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_UYVY)
-    else:
-        print("Unsupported color format: {}".format(color_format))
-        return None
-    return image
-    
 
 
 def flatten_list(l):
@@ -141,6 +34,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
         self.episode_len = episode_len
         self.chunk_size = chunk_size
         self.cumulative_len = np.cumsum(self.episode_len)
+        print(f"init_dataset_len:{self.cumulative_len}")
         self.max_episode_len = max(episode_len)
         # self.max_episode_len = 100
         self.policy_class = policy_class
@@ -149,13 +43,15 @@ class EpisodicDataset(torch.utils.data.Dataset):
         else:
             self.augment_images = False
         self.transformations = None
-        self.__getitem__(0)  # initialize self.is_sim and self.transformations
+        #self.__getitem__(0)  # initialize self.is_sim and self.transformations
         self.is_sim = False
 
-    # def __len__(self):
-    #     return sum(self.episode_len)
+    def __len__(self):
+        return sum(self.episode_len)
 
     def _locate_transition(self, index):
+        #print(f"index:{index}")
+        #print(f"dataset_len:{self.cumulative_len[-1]}")
         assert index < self.cumulative_len[-1]
         episode_index = np.argmax(self.cumulative_len > index)  # argmax returns first True index
         start_ts = index - (self.cumulative_len[episode_index] - self.episode_len[episode_index])
@@ -265,7 +161,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
             quit()
 
         # print(image_data.dtype, qpos_data.dtype, action_data.dtype, is_pad.dtype)
-        return image_data, qpos_data, action_data, is_pad
+        return image_data, qpos_data, action_data, is_pad,index
 
 
 def get_norm_stats(dataset_path_list):
@@ -334,19 +230,19 @@ def find_all_hdf5(dataset_dir, skip_mirrored_data):
     return hdf5_files
 
 
-def BatchSampler(batch_size, episode_len_l, sample_weights):
-    sample_probs = np.array(sample_weights) / np.sum(sample_weights) if sample_weights is not None else None
-    sum_dataset_len_l = np.cumsum([0] + [np.sum(episode_len) for episode_len in episode_len_l])
-    while True:
-        batch = []
-        for _ in range(batch_size):
-            episode_idx = np.random.choice(len(episode_len_l), p=sample_probs)
-            step_idx = np.random.randint(sum_dataset_len_l[episode_idx], sum_dataset_len_l[episode_idx + 1])
-            batch.append(step_idx)
-        yield batch
+#def BatchSampler(batch_size, episode_len_l, sample_weights):
+#    sample_probs = np.array(sample_weights) / np.sum(sample_weights) if sample_weights is not None else None
+#    sum_dataset_len_l = np.cumsum([0] + [np.sum(episode_len) for episode_len in episode_len_l])
+#    while True:
+#        batch = []
+#        for _ in range(batch_size):
+#            episode_idx = np.random.choice(len(episode_len_l), p=sample_probs)
+#            step_idx = np.random.randint(sum_dataset_len_l[episode_idx], sum_dataset_len_l[episode_idx + 1])
+#            batch.append(step_idx)
+#       yield batch
 
 
-def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_size_val, chunk_size, skip_mirrored_data=False, load_pretrain=False, policy_class=None, stats_dir_l=None, sample_weights=None, train_ratio=0.99,worker_num=1):
+def load_data(world_size,local_rank,dataset_dir_l, name_filter, camera_names, batch_size_train, batch_size_val, chunk_size, skip_mirrored_data=False, load_pretrain=False, policy_class=None, stats_dir_l=None, sample_weights=None, train_ratio=0.99,worker_num=1):
     if type(dataset_dir_l) == str:
         dataset_dir_l = [dataset_dir_l]
     dataset_path_list_list = [find_all_hdf5(dataset_dir, skip_mirrored_data) for dataset_dir in dataset_dir_l]
@@ -379,6 +275,7 @@ def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_
     train_episode_len_l = [[all_episode_len[i] for i in train_episode_ids] for train_episode_ids in train_episode_ids_l]
     val_episode_len_l = [[all_episode_len[i] for i in val_episode_ids] for val_episode_ids in val_episode_ids_l]
     train_episode_len = flatten_list(train_episode_len_l)
+    print(f"train_dataset_len:{train_episode_len}")
     val_episode_len = flatten_list(val_episode_len_l)
     if stats_dir_l is None:
         stats_dir_l = dataset_dir_l
@@ -386,9 +283,6 @@ def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_
         stats_dir_l = [stats_dir_l]
     norm_stats, _ = get_norm_stats(flatten_list([find_all_hdf5(stats_dir, skip_mirrored_data) for stats_dir in stats_dir_l]))
     print(f'Norm stats from: {stats_dir_l}')
-
-    batch_sampler_train = BatchSampler(batch_size_train, train_episode_len_l, sample_weights)
-    batch_sampler_val = BatchSampler(batch_size_val, val_episode_len_l, None)
 
     # print(f'train_episode_len: {train_episode_len}, val_episode_len: {val_episode_len}, train_episode_ids: {train_episode_ids}, val_episode_ids: {val_episode_ids}')
 
@@ -398,6 +292,14 @@ def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_
     train_num_workers = worker_num 
     val_num_workers = worker_num 
     print(f'Augment images: {train_dataset.augment_images}, train_num_workers: {train_num_workers}, val_num_workers: {val_num_workers}')
+    train_sampler = DistributedSampler(train_dataset,num_replicas=world_size,rank=local_rank)
+    val_sampler = DistributedSampler(val_dataset,num_replicas=world_size,rank=local_rank)
+    batch_sampler_train = BatchSampler(train_sampler,batch_size_train, drop_last=False)
+    batch_sampler_val = BatchSampler(val_sampler,batch_size_val, drop_last=False)
+    
+    print(f"batch_sample:{batch_sampler_train}")
+    for i, index in enumerate(batch_sampler_train):
+        print(f"{index}")
     train_dataloader = DataLoader(train_dataset, batch_sampler=batch_sampler_train, pin_memory=True, num_workers=train_num_workers, prefetch_factor=2)
     val_dataloader = DataLoader(val_dataset, batch_sampler=batch_sampler_val, pin_memory=True, num_workers=val_num_workers, prefetch_factor=2)
 

@@ -31,14 +31,14 @@ class Train:
         self.args = {
             'eval': False,
             'onscreen_render': False,
-            'ckpt_dir': "/workspace/exchange/hdf5_file_exchange_5-29/act",#ckpt保存路径
-            'dataset_dir':"/workspace/exchange/hdf5_file_exchange_5-29",#数据集路径
-            'state_dim': 16,
-            'action_dim': 16,
+            'ckpt_dir': "/workspace/exchange/8-20-duikong/act_8_20",#ckpt保存路径
+            'dataset_dir':"/workspace/exchange/8-20-duikong",#数据集路径
+            'state_dim': 8,
+            'action_dim': 8,
             'model_type':'ACT',
             'policy_class': 'ACT',
             'task_name': 'train',
-            'batch_size': 8,
+            'batch_size': 2,
             'seed': 0,
             'num_steps': 80000,
             'lr': 1e-5,

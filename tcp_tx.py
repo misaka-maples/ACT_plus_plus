@@ -281,8 +281,8 @@ if __name__ == "__main__":
             if message == "1,4":
                 client.set_arm_position( [-109.0, -811.015, -288.718, 2.47157, -0.00245327, 2.28383],"pose",1)
             if message == "1":
-                client.set_speed(1,10)
-                client.set_speed(2,10)
+                client.set_speed(1,30)
+                client.set_speed(2,30)
             if message == "2":
                 client.set_arm_position([-127.205, -584.918, -238.196, 2.8373, -0.121059, 1.07089],"pose",1)
                 # client.set_arm_position([-135.806, -657.58, -132.078, 2.35454, 0.0848985, 1.51967],"pose",1)

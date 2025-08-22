@@ -527,14 +527,14 @@ class eval:
             square_size = 100
         else:
             data_dict = Modify_hdf5()
-            dict_ = data_dict.check_hdf5(r'/workspace/exchange/5-9/duikong/episode_1.hdf5')
+            dict_ = data_dict.check_hdf5(r'/workspace/exchange/8-20-hsq/episode_30.hdf5')
             # print(dict_["action"].shape)
             loop_len = len(dict_['top'])
         config = {
-            'ckpt_dir': r'/workspace/exchange/5-9/duikong/act_test',
+            'ckpt_dir': r'/workspace/exchange/8-20-hsq',
             'max_timesteps': loop_len,
-            'ckpt_name': "policy_step_1000_seed_0.ckpt",
-            'backbone': 'resnet18',
+            'ckpt_name': "policy_best.ckpt",
+            'backbone': 'swin_T',
             'temporal_agg':True,
         }
         image_dict = {i:[] for i in camera_names}

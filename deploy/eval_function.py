@@ -21,6 +21,7 @@ from pyorbbecsdk import *
 from utils import frame_to_bgr_image
 from camera_hot_plug import CAMERA_HOT_PLUG
 from gpcontrol import GPCONTROL
+from serial_control import GripperCANController
 MAX_DEVICES = 5  # 假设最多支持 5 台设备
 MAX_QUEUE_SIZE = 10  # 最大帧队列长度
 multi_device_sync_config = {}
@@ -46,7 +47,7 @@ STATE_NAMES = JOINT_NAMES +["gripper_pos"]+ ["gripper_force"]
 camera_names = ['top', 'right_wrist','left_wrist']
 
 class eval:
-    def __init__(self,camera,persistentClient,gp_contrpl,real_robot=False,data_true=False,ckpt_dir=r'/workspace/exchange/4-24/act',ckpt_name="policy_step_78000_seed_0.ckpt",hdf5_path=r'/workspace/exchange/4-24/hdf5_file_exchange/episode_6.hdf5',state_dim=8,temporal_agg=False):
+    def __init__(self,camera,persistentClient,gp_control,real_robot=False,data_true=False,ckpt_dir=r'/workspace/exchange/4-24/act',ckpt_name="policy_step_78000_seed_0.ckpt",hdf5_path=r'/workspace/exchange/4-24/hdf5_file_exchange/episode_6.hdf5',state_dim=8,temporal_agg=False):
         self.real_robot = real_robot
         self.data_true = data_true
         self.ckpt_dir = ckpt_dir
@@ -57,8 +58,8 @@ class eval:
         if self.real_robot:
             self.camera:CAMERA_HOT_PLUG = camera
             self.persistentClient:PersistentClient = persistentClient
-            self.gp_contrpl:GPCONTROL = gp_contrpl
-            # self.gp_contrpl.start()
+            self.gp_control:GPCONTROL = gp_control
+            # self.gp_control.start()
             self.image = {'top': [], 'right_wrist': [], 'left_wrist':[]}
             self.main()
 
@@ -173,8 +174,7 @@ class eval:
                     # self.updata_frame()
                     left_qpos = self.persistentClient.get_arm_position_joint(1)
                     right_qpos = self.persistentClient.get_arm_position_joint(2)
-                    left_gp ,right_gp= self.gp_contrpl.state
-                    print(left_gp ,right_gp)
+                    left_gp ,right_gp= self.gp_control.gpstate
                     # left_pos=left_gp[1]
                     # left_force = left_gp[2]
                     # right_pos=right_gp[1]
@@ -268,9 +268,11 @@ class eval:
                     self.persistentClient.set_arm_position(list(right_arm_action), "joint", 2)
                 self.persistentClient.set_arm_position(list(left_arm_action), "joint", 1)
                 if right_gp.size == 0:
-                    self.gp_contrpl.set_state([int(left_gp[0]),0])
+                    self.gp_control.set_value_func(1,int(left_gp[0]))
                 else:
-                    self.gp_contrpl.set_state([int(left_gp[0]),int(right_gp[0])])
+                    self.gp_control.set_value_func(1,int(left_gp[0]))
+                    self.gp_control.set_value_func(2,int(right_gp[0]))
+
             actions_list.append(actions)
         today = current_time.strftime("%m-%d-%H-%M")
         path_save_image = os.path.join(os.getcwd(), "deploy_image", f"{today}")
@@ -283,30 +285,31 @@ class eval:
 # complete_sign = 0
 if __name__ == '__main__':
     camera = CAMERA_HOT_PLUG(fps=30)
-    
     robot = PersistentClient('192.168.3.15', 8001)
-    gpcontrol = GPCONTROL()
-    gpcontrol.start()
+    gpcontrol = GripperCANController()
+    gpcontrol.connect_ACM_port()
+    gpcontrol.start_thread()
     time.sleep(3)
     eval(camera=camera,
          persistentClient=robot,
-         gp_contrpl=gpcontrol,
+         gp_control=gpcontrol,
          real_robot=True,
-         data_true=False,
-         ckpt_dir=r'/workspace/exchange/5-9/exchange/act_overwrited',
-         ckpt_name='policy_step_10000_seed_0.ckpt',
-         hdf5_path=r'/workspace/exchange/5-9/exchange/episode_22.hdf5',
+         data_true=True,
+         ckpt_dir=r'/workspace/exchange/8-20-hsq',
+         ckpt_name='policy_best.ckpt',
+         hdf5_path=r'/workspace/exchange/exchange/episode_28.hdf5',
          state_dim=16,
          temporal_agg=True)
+
     # time.sleep(2)
-    print("第二段")
-    eval(camera=camera,
-         persistentClient=robot,
-         gp_contrpl=gpcontrol,
-         real_robot=True,
-         data_true=False,
-         ckpt_dir=r'/workspace/exchange/5-9/duikong/act',
-         ckpt_name='policy_best.ckpt',
-         hdf5_path=r'/workspace/exchange/5-9/duikong/episode_23.hdf5',
-         state_dim=8,
-         temporal_agg=True)
+    # print("第二段")
+    # eval(camera=camera,
+    #      persistentClient=robot,
+    #      gp_control=gpcontrol,
+    #      real_robot=True,
+    #      data_true=True,
+    #      ckpt_dir=r'/workspace/exchange/duikong/act_8_12',
+    #      ckpt_name='policy_best.ckpt',
+    #      hdf5_path=r'/workspace/exchange/duikong/episode_28.hdf5',
+    #      state_dim=8,
+    #      temporal_agg=False)

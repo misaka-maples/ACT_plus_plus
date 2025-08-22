@@ -278,7 +278,7 @@ class CAMERA_HOT_PLUG:
         return arg
 if __name__ == "__main__":
     camera = CAMERA_HOT_PLUG(fps=30)
-    right_camera_sn = 'CP1L44P0004Y'
+    right_camera_sn = 'CP3294Y0002T'
     # print(camera.multi_device_sync_config)
     # time.sleep(1)
 #     [[612.32965088   0.         643.00286865]

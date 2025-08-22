@@ -1,7 +1,7 @@
 {
     "devices": [
         {
-            "serial_number": "CP1L44P0006E",
+            "serial_number": "CP253530006L",
             "config": {
                 "mode": "SECONDARY",
                 "depth_delay_us": 0,
@@ -14,7 +14,7 @@
             }
         },
         {
-            "serial_number": "CP1E54200056",
+            "serial_number": "CP1Z842000J1",
             "config": {
                 "mode": "PRIMARY",
                 "depth_delay_us": 0,
@@ -27,7 +27,7 @@
             }
         },
         {
-            "serial_number": "CP1L44P0004Y",
+            "serial_number": "CP3294Y0002T",
             "config": {
                 "mode": "SECONDARY",
                 "depth_delay_us": 0,

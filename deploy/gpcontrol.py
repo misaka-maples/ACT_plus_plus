@@ -2,7 +2,7 @@ import threading
 import time
 import serial
 class GPCONTROL(threading.Thread):
-    def __init__(self, DEFAULT_SERIAL_PORTS=("/dev/ttyACM0", "/dev/ttyACM1", "/dev/ttyACM2")):
+    def __init__(self, DEFAULT_SERIAL_PORTS=("/dev/ttyACM0", "/dev/ttyACM1", "/dev/ttyACM2", "/dev/ttyACM3", "/dev/ttyACM4", "/dev/ttyACM5")):
         super().__init__()
         self.serial_ok = True  # 串口正常标志
 
@@ -45,7 +45,9 @@ class GPCONTROL(threading.Thread):
             state_2 = self.set_gp_state(self.state_data_2, can_id=1)
             self.state = [state_1, state_2]
             time.sleep(0.2)
-
+    def start_gp(self):
+        self.running = True
+        super().start()
     def open(self):
         self.state_data_2=255
     def close_(self):
@@ -198,12 +200,12 @@ class GPCONTROL(threading.Thread):
         open_gp = b'\x00' + value.to_bytes(1, 'big') + b'\xFF\xFF\xFF\xFF\x00\x00'
         
         while 1:
-            self.send_can_data(b'\x00\x00\x00\x01', open_gp, can_id)
+            self.send_can_data(b'\x00\x00\x00\x08', open_gp, can_id)
             data = self.read_data() 
             if data is not None:
                 _, gpdata = data
                 while gpdata == 0:
-                    self.send_can_data(b'\x00\x00\x00\x01', open_gp, can_id)
+                    self.send_can_data(b'\x00\x00\x00\x08', open_gp, can_id)
                     data = self.read_data()
                     if data is not None:
                         _, gpdata = data
@@ -269,16 +271,16 @@ class GPCONTROL(threading.Thread):
 
 if __name__ == "__main__":
     gpcontrol = GPCONTROL()
-    gpcontrol.start()
+    gpcontrol.start_gp()
     time.sleep(2)
     # gpcontrol.set_state([0,0])
     # time.sleep(2)
     while True:
         print(gpcontrol.state)
 
-        gpcontrol.set_state([128,128])
-        time.sleep(2)
-        gpcontrol.set_state([128,0])
+        # gpcontrol.set_state([128,128])
+        # time.sleep(2)
+        # gpcontrol.set_state([128,0])
     # print(gpcontrol.state)
     # gpcontrol.state
     gpcontrol.stop()

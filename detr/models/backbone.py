@@ -2,20 +2,25 @@
 """
 Backbone modules.
 """
+import math
 from collections import OrderedDict
+from torchvision.models import get_model_weights
+# 获取对应模型的默认权重
 
-import torch,os
+import torch
 import torch.nn.functional as F
 import torchvision
 from torch import nn
 from torchvision.models._utils import IntermediateLayerGetter
 from typing import Dict, List
+import timm
 
-from util.misc import NestedTensor, is_main_process
+from detr.util.misc import NestedTensor, is_main_process
 
 from .position_encoding import build_position_encoding
 
 import IPython
+import os
 e = IPython.embed
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -59,58 +64,101 @@ class FrozenBatchNorm2d(torch.nn.Module):
 
 class BackboneBase(nn.Module):
 
-    def __init__(self, backbone: nn.Module, train_backbone: bool, num_channels: int, 
-                 return_interm_layers: bool,
-                 name: str):
+    def __init__(self, backbone: nn.Module, train_backbone: bool, num_channels: int, return_interm_layers: bool):
         super().__init__()
         # for name, parameter in backbone.named_parameters(): # only train later layers # TODO do we want this?
         #     if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
         #         parameter.requires_grad_(False)
-        self.name = name
-        if name.startswith('resnet'):
-            if return_interm_layers:
-                return_layers = {"layer1": "0", "layer2": "1", "layer3": "2", "layer4": "3"}
-            else:
-                return_layers = {'layer4': "0"}
+        if return_interm_layers:
+
+            return_layers = {"layer1": "0", "layer2": "1.md", "layer3": "2", "layer4": "3"}
+        else:
+            return_layers = {'layer4': "0"}
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
         self.num_channels = num_channels
 
     def forward(self, tensor):
         xs = self.body(tensor)
         return xs
+        # out: Dict[str, NestedTensor] = {}
+        # for name, x in xs.items():
+        #     m = tensor_list.mask
+        #     assert m is not None
+        #     mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
+        #     out[name] = NestedTensor(x, mask)
+        # return out
 
 
 class Backbone(BackboneBase):
     """ResNet backbone with frozen BatchNorm."""
+
     def __init__(self, name: str,
                  train_backbone: bool,
                  return_interm_layers: bool,
-                 dilation: bool,
-                 simclr_pretrained_path: str = None):  # <- 新增参数
+                 dilation: bool):
+        backbone = getattr(torchvision.models, name)(
+            replace_stride_with_dilation=[False, False, dilation],
+            pretrained=is_main_process(),
+            norm_layer=FrozenBatchNorm2d)  # pretrained # TODO do we want frozen batch_norm??
+        num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
+        super().__init__(backbone, train_backbone, num_channels, return_interm_layers)
 
-        if name.startswith('resnet'):
-            print(f'=================Using resnet {name}=================')
-            backbone = getattr(torchvision.models, name)(
-                replace_stride_with_dilation=[False, False, dilation],
-                pretrained=is_main_process(),  # 原有逻辑保留
-                norm_layer=FrozenBatchNorm2d)
+def pad_image(image, patch_size=14):
+    """
+    填充图像，使其高度和宽度成为补丁大小的整数倍。
 
-            # 替换 fc 层（SimCLR 默认处理）
-            backbone.fc = nn.Identity()
+    参数:
+        image (torch.Tensor): 输入图像张量，形状为 (B, C, H, W)。
+        patch_size (int): 每个补丁的大小。
 
-            num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
+    返回:
+        torch.Tensor: 填充后的图像张量。
+    """
+    _, _, H, W = image.shape
+    pad_H = (patch_size - H % patch_size) % patch_size
+    pad_W = (patch_size - W % patch_size) % patch_size
+    padded_image = F.pad(image, (0, pad_W, 0, pad_H), mode='constant', value=0)
+    return padded_image
 
-            # ✅ 如果指定了 simclr 预训练模型路径，则加载它（非强制）
-            if simclr_pretrained_path and os.path.exists(simclr_pretrained_path):
-                print(f"[SimCLR] Loading pretrained encoder from: {simclr_pretrained_path}")
-                state_dict = torch.load(simclr_pretrained_path, map_location='cpu')
-                # 仅加载匹配 encoder 的部分
-                missing_keys, unexpected_keys = backbone.load_state_dict(state_dict, strict=False)
-                print(f"[SimCLR] Missing keys: {missing_keys}")
-                print(f"[SimCLR] Unexpected keys: {unexpected_keys}")
+from timm import create_model
+class SwinTransformerBackbone(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.body = create_model(
+        'swin_base_patch4_window7_224.ms_in22k', pretrained=True, features_only=True, img_size=(480, 640), window_size=(7, 7), strict_img_size=False, always_partition=True)
+        self.body.eval()
+        self.num_channels = self.body.feature_info[-1]['num_chs']
+    def forward(self, tensor):
+        features = self.body(tensor)
+        # print("tensor",tensor.shape)
+        # print("features[-1]", features[-1].shape)
+        # print(self.num_channels)
+        od = OrderedDict()
+        od["0"] = features[-1].permute(0, 3, 1, 2) # [B, C, H, W]
+        # print('od["0"]',od["0"].shape)
+        return od
+        
 
-        super().__init__(backbone, train_backbone, num_channels, return_interm_layers, name)
+class DINOv2BackBone(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        path = '/home/zhnh/Documents/project/act_arm_project/detr/dino_v2'
+        os.makedirs(path, exist_ok=True)
 
+        # 设置本地缓存目录
+        torch.hub.set_dir(path)
+        self.body = torch.hub.load('/home/zhnh/Documents/project/act_arm_project/detr/dino_v2/facebookresearch_dinov2_main', 'dinov2_vits14',source='local')
+        self.body.eval()
+        self.num_channels = 384
+        # 如果你想把模型保存到本地文件
+        # torch.save(self.body.state_dict(), r'/home/zhnh/Documents/project/act_arm_project/detr/dino_v2')
+
+    @torch.no_grad()
+    def forward(self, tensor):
+        xs = self.body.forward_features(tensor)["x_norm_patchtokens"]
+        od = OrderedDict()
+        od["0"] = xs.reshape(xs.shape[0], 22, 16, 384).permute(0, 3, 2, 1)
+        return od
 
 class Joiner(nn.Sequential):
     def __init__(self, backbone, position_embedding):
@@ -132,12 +180,14 @@ def build_backbone(args):
     position_embedding = build_position_encoding(args)
     train_backbone = args.lr_backbone > 0
     return_interm_layers = args.masks
-
-    # ✅ 支持传入 simclr encoder 路径（如无，则默认为 None）
-    simclr_path = getattr(args, "simclr_pretrained_path", None)
-
-    backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation,
-                        simclr_pretrained_path=simclr_path)
+    if args.backbone == 'dino_v2':
+        backbone = DINOv2BackBone()
+    elif args.backbone == 'swin_T':
+        backbone = SwinTransformerBackbone()
+    else:
+        assert args.backbone in ['resnet18', 'resnet34']
+        backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels
     return model
+
